@@ -1,0 +1,60 @@
+[project]
+name = "audit-log-microservice"
+version = "0.1.0"
+description = "Audit Log microservice for pdf-extractext: append-only audit trail stored in MongoDB."
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.13.0",
+    "pymongo>=4.13.0",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.16.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# El informe se ve siempre en cada ejecución, pero el umbral NO se exige aquí:
+# haría que cada pasada incremental fallara hasta que haya suficientes tests. La
+# puerta se ejecuta explícitamente en cada checkpoint:
+#     uv run pytest --cov-fail-under=100
+addopts = "--cov=app"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+# Los bloques de Python dentro de los documentos Markdown de diseño son
+# fragmentos ilustrativos, no código fuente. Reformatearlos reescribiría SPEC.md y
+# tasks/*.md en cada ejecución.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI declara una dependencia como una llamada en el valor por defecto del
+# parámetro. Es el idiolecta del propio framework, evaluado una vez al importar,
+# no un valor por defecto mutable.
+"app/api/routers/*.py" = ["B008"]
