@@ -48,6 +48,22 @@ def test_upper_layers_do_not_import_pymongo(layer: str) -> None:
     assert not offenders, f"app/{layer} no debe importar pymongo: {offenders}"
 
 
+def test_audit_logs_router_does_not_import_pymongo_or_repositories() -> None:
+    """AC de T10: la Capa 1 no puede conocer el driver ni Capa 3. El router
+    pide el servicio por dependency injection (`app.state`), no lo construye."""
+    source = (APP_DIR / "api" / "routers" / "audit_logs.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            imported.add(node.module)
+
+    assert not any(name == "pymongo" or name == "pymongo.errors" for name in imported)
+    assert not any(name.startswith("app.repositories") for name in imported)
+
+
 def test_repositories_do_not_import_inner_layers() -> None:
     """La dependencia apunta hacia adentro: Capa 3 no conoce Capa 1 ni 2."""
     offenders = {

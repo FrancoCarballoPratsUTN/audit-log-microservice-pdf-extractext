@@ -13,11 +13,14 @@ funcionan:
   estrecharlo rechazaría justamente las extensiones que el contrato permite.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from app.api.schemas import AuditEventRequest, AuditLogResponse, ProblemDetails
+from app.domain.models import AuditLog
 
 VALID_EVENT = {
     "action": "pdf.extract",
@@ -147,6 +150,41 @@ def test_response_defaults_to_a_non_replayed_creation() -> None:
         "received_at": "2026-10-05T12:34:57.041Z",
     }
     assert AuditLogResponse(**payload).idempotent_replay is False
+
+
+def test_response_from_log_renders_dates_and_id_like_the_repository() -> None:
+    """El router construye la respuesta desde el dominio; el alias `_id`, las
+    fechas RFC 3339 con `Z` y el campo extra tienen que salir byte a byte como
+    en `render` de Capa 3, para que un solo formato llegue al cable."""
+    log = AuditLog(
+        id="6f1c9a2b3d4e5f60718293a4",
+        action="pdf.extract",
+        entity_type="document",
+        checksum="9f86d081884c7d659a2feaa0c55ad015",
+        performed_at=datetime(2026, 10, 5, 12, 34, 56, 789000, tzinfo=UTC),
+        received_at=datetime(2026, 10, 5, 12, 34, 57, 41000, tzinfo=UTC),
+        details={"page_count": 12},
+    )
+
+    serialized = AuditLogResponse.from_log(log).model_dump(by_alias=True)
+
+    assert serialized["_id"] == "6f1c9a2b3d4e5f60718293a4"
+    assert serialized["performed_at"] == "2026-10-05T12:34:56.789Z"
+    assert serialized["received_at"] == "2026-10-05T12:34:57.041Z"
+    assert serialized["idempotent_replay"] is False
+
+
+def test_response_from_log_marks_a_replay() -> None:
+    log = AuditLog(
+        id="6f1c9a2b3d4e5f60718293a4",
+        action="pdf.extract",
+        entity_type="document",
+        checksum="9f86d081",
+        performed_at=datetime(2026, 10, 5, 12, 34, 56, tzinfo=UTC),
+        received_at=datetime(2026, 10, 5, 12, 34, 57, tzinfo=UTC),
+        details={},
+    )
+    assert AuditLogResponse.from_log(log, replay=True).idempotent_replay is True
 
 
 def test_problem_details_requires_the_five_canonical_members() -> None:

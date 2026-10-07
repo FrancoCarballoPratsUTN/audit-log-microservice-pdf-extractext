@@ -12,12 +12,12 @@ saber que el `_id` lo genera Mongo y que `details` nunca se guarda como
 """
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
 
-from app.domain.models import AuditLog, CreateAuditLogRequest
+from app.domain.models import AuditLog, CreateAuditLogRequest, rfc3339_utc
 
 
 def to_document(
@@ -81,15 +81,9 @@ def render(log: AuditLog) -> dict[str, Any]:
         "entity_type": log.entity_type,
         "checksum": log.checksum,
         "details": log.details,
-        "performed_at": _rfc3339(log.performed_at),
-        "received_at": _rfc3339(log.received_at),
+        "performed_at": rfc3339_utc(log.performed_at),
+        "received_at": rfc3339_utc(log.received_at),
     }
-
-
-def _rfc3339(value: datetime) -> str:
-    """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos."""
-    utc = value.astimezone(UTC)
-    return f"{utc:%Y-%m-%dT%H:%M:%S}.{utc.microsecond // 1000:03d}Z"
 
 
 __all__ = ["render", "to_audit_log", "to_document"]

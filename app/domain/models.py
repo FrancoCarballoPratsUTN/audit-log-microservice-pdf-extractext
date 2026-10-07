@@ -18,6 +18,18 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def rfc3339_utc(value: datetime) -> str:
+    """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos.
+
+    Es la representación que parsea `time.Time` del orquestador (§2.4). Como la
+    necesitan la Capa 1 (`AuditLogResponse.from_log`) y la Capa 3
+    (`serialization.render`), vive aquí, en la capa que ambas ven, para que un
+    solo formato llegue al cable.
+    """
+    utc = value.astimezone(UTC)
+    return f"{utc:%Y-%m-%dT%H:%M:%S}.{utc.microsecond // 1000:03d}Z"
+
+
 @dataclass(frozen=True, slots=True)
 class CreateAuditLogRequest:
     """Datos entrantes para crear un registro de auditoría.
@@ -71,4 +83,4 @@ class AuditLog:
             object.__setattr__(self, "details", {})
 
 
-__all__ = ["AuditLog", "CreateAuditLogRequest"]
+__all__ = ["AuditLog", "CreateAuditLogRequest", "rfc3339_utc"]

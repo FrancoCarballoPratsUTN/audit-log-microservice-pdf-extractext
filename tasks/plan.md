@@ -4,7 +4,7 @@
 > Este archivo es el plan de ejecución; el checklist operativo vive en
 > [`todo.md`](./todo.md).
 >
-> **Estado:** en ejecución. T1–T9 cerradas y verificadas (274 tests, 100 % de
+> **Estado:** en ejecución. T1–T10 cerradas y verificadas (294 tests, 100 % de
 > cobertura de `app/`); el checklist de estado vive en [`todo.md`](./todo.md).
 
 ---
@@ -46,6 +46,7 @@ Se llenan durante la Fase 3.
 | **12** | T7 fija nombres propios para el puerto y el dominio: `AuditLog` / `CreateAuditLogRequest`, `find_by_checksum`, `list`, `count` | SPEC §5.1 y el plan pedían `StoredAuditLog` / `NewAuditLog`, `list_by_checksum(query)`, `list_page(query)`, `ping()` | T7 se entregó y cerró con los modelos de dominio aprobados (`AuditLog`, `CreateAuditLogRequest`, 20 tests). Son nombres internos: ninguno cruza el contrato HTTP que ve el cliente Go. Renombrarlos reescribiría una tarea cerrada sin ganar nada; las referencias de T9/T12/T13 a `StoredAuditLog`, `list_page` y `list_by_checksum` se leen como sus equivalentes entregados. Además, el test del puerto vive en `tests/unit/repositories/test_protocol.py`, no en `tests/unit/services/test_ports.py`, y el AC «el fake cuenta invocaciones de `insert` y `find_replay`» sólo estaba a medias: a `find_replay_calls` le faltaba el contador (añadido en T8) |
 | **13** | T8 añade `tests/unit/repositories/test_mongo_audit_log_repository.py` y `tests/unit/repositories/test_protocol.py`, y define `ReplayDetected` en `app/repositories/protocol.py` | El plan sólo listaba `tests/unit/repositories/test_serialization.py` y el test de integración; no decía dónde vive la señal de replay | El AC «ningún `PyMongoError` escapa sin traducir» se decide rama a rama (`DuplicateKeyError`, `DocumentTooLarge`, `PyMongoError` genérico, errores que **no** son del driver): sin unitarios con una colección falsa, esa cobertura dependería de tener Mongo levantado y el gate del 100 % sería intermitente. La señal de replay es parte del contrato del puerto —la lanza la Capa 3 y la consume la Capa 2—, así que vive junto a `AuditLogRepository`. `test_protocol.py` cierra además el AC de T7 que no estaba verificado en ningún test: que el fake satisface el `Protocol` |
 | **14** | `received_at` lo pica la Capa 3 (`MongoAuditLogRepository.insert` con `datetime.now(UTC)`); el servicio no tiene reloj inyectable | T9: «`received_at` lo pone el reloj inyectable del servicio», y el flujo de SPEC §9 muestra `received_at = reloj de AUDA` en la Capa 2 | El puerto `insert(request)` de T7/T8 no recibe `received_at` ni lo expone `CreateAuditLogRequest`; inyectarle un reloj al servicio exigiría abrir una tarea cerrada y cambiar el contrato del puerto sin ganancia observable. El observable que importa (SPEC §5.2) es «`received_at` del servidor, no del emisor»: la Capa 3 usa el reloj del servidor y el test de T9 lo afirma con tolerancia. `performed_at` sí queda cubierto explícitamente como «el del emisor, sin tocar» |
+| **15** | T10 añade `tests/unit/api/routers/test_audit_logs_router.py`, tests de `AuditLogResponse.from_log` en `test_schemas.py`, un guard de imports en `test_package_layout.py`, y mueve el formateo RFC 3339 a `app/domain/models.rfc3339_utc` | El plan listaba sólo `tests/integration/api/test_create_audit_log.py`, y SPEC/plan dejaban el render de fechas en `serialization.py` (Capa 3) | La Capa 1 no puede importar `app.repositories` (AC de T10), así que el router no puede usar `render`. Si el endpoint viviera sólo en tests de integración, los unit de Capa 1 caerían en skipping cuando Mongo no está y el gate del 100 % sería intermitente —el mismo argumento que la desviación 13. `rfc3339_utc` pasa a la única capa que Capas 1 y 3 ven, y `serialization.render` la reutiliza: el formato llega al cable por una sola primitiva, que es lo que el docstring de `serialization.py` ya exigía. El guard de imports reemplaza un chequeo por substring por un `ast` (el docstring del router nombra `app.repositories` y haría un falso positivo) |
 | — | — | — | — |
 
 ---
@@ -613,20 +614,21 @@ audit/logs/checksum/<escaped>`, o `200` + `X-Idempotent-Replay: true` en replay.
 `dependencies.py` inyecta el servicio desde `app.state`; `main.py` compone todo.
 
 **Acceptance criteria:**
-- [ ] Body válido ⇒ `201`, `Location` y los **7** campos; el documento existe en Mongo
-- [ ] Body repetido ⇒ `200` + `idempotent_replay: true` + `X-Idempotent-Replay: true`
-- [ ] Body inválido, clave desconocida o `performed_at` sin offset ⇒ `400` con el
+- [x] Body válido ⇒ `201`, `Location` y los **7** campos; el documento existe en Mongo
+- [x] Body repetido ⇒ `200` + `idempotent_replay: true` + `X-Idempotent-Replay: true`
+- [x] Body inválido, clave desconocida o `performed_at` sin offset ⇒ `400` con el
       `code` correcto
-- [ ] `details` de más de 64 KiB ⇒ `413`, y el documento **no** se escribe
-- [ ] Un `checksum` de formato arbitrario (no-hex, con guiones, con mayúsculas) se
+- [x] `details` de más de 64 KiB ⇒ `413`, y el documento **no** se escribe
+- [x] Un `checksum` de formato arbitrario (no-hex, con guiones, con mayúsculas) se
       **acepta y persiste** — no hay validación de formato
-- [ ] `details` ausente ⇒ `{}` guardado; `details` con claves anidadas ⇒ verbatim
-- [ ] El `Location` escapa con `quote(..., safe="")` para que un `checksum` con
+- [x] `details` ausente ⇒ `{}` guardado; `details` con claves anidadas ⇒ verbatim
+- [x] El `Location` escapa con `quote(..., safe="")` para que un `checksum` con
       `/` o comillas no rompa la URL
-- [ ] `app/api/routers/audit_logs.py` no importa `pymongo` ni `app.repositories`
+- [x] `app/api/routers/audit_logs.py` no importa `pymongo` ni `app.repositories`
 
 **Verification:**
-- [ ] `uv run pytest tests/integration/api/test_create_audit_log.py -v`
+- [x] `uv run pytest tests/integration/api/test_create_audit_log.py -v` — 10 tests
+      (294 suite completa, 100 % de cobertura)
 - [ ] Manual: `curl -i -X POST localhost:8083/audit/logs -H 'Authorization: Bearer <tok>'
       -H 'Content-Type: application/json' -d '{"action":"pdf.extract","entity_type":"document",
       "checksum":"abc123","details":{"page_count":3},"performed_at":"2026-10-05T12:34:56Z"}'`

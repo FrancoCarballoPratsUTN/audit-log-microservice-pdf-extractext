@@ -22,15 +22,18 @@ from fastapi import FastAPI
 
 from app.api.auth import BearerAuthMiddleware
 from app.api.exception_handlers import register_exception_handlers
+from app.api.routers.audit_logs import router as audit_logs_router
 from app.api.routers.health import router as health_router
 from app.config import Settings, get_settings
 from app.errors import AuditStorageError
+from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
 from app.repositories.mongodb import (
     audit_logs_collection,
     ensure_indexes,
     open_client,
     ping,
 )
+from app.services.audit_log_service import AuditLogService
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     client = open_client(settings)
     app.state.mongo_client = client
+
+    # El servicio y el repositorio, construidos una vez en el arranque y
+    # guardados en `app.state`: el router los pide por dependency injection y
+    # ningún test tiene que saber cómo se montan (SPEC §12).
+    app.state.audit_log_service = AuditLogService(
+        MongoAuditLogRepository(audit_logs_collection(client, settings))
+    )
 
     try:
         try:
@@ -84,6 +94,7 @@ def create_app() -> FastAPI:
     app.add_middleware(BearerAuthMiddleware)
 
     app.include_router(health_router)
+    app.include_router(audit_logs_router)
     app.state.settings = settings
     app.state.api_token = settings.service_api_token.get_secret_value()
     return app

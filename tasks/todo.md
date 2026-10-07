@@ -4,8 +4,8 @@
 > dependencias) está en [`plan.md`](./plan.md); el diseño en
 > [`../SPEC.md`](../SPEC.md).
 >
-> **Estado:** 9/16 tareas. T7–T9 cerradas y verificadas (274 tests, 100 % de
-> cobertura de `app/`); Checkpoint Core slice pendiente de revisión humana.
+> **Estado:** 10/16 tareas. T7–T10 cerradas y verificadas (294 tests, 100 % de
+> cobertura de `app/`); Checkpoint Core slice pendiente de T11 y revisión humana.
 
 ---
 
@@ -116,15 +116,15 @@
   - [x] Señal de `DuplicateKeyError` produce el mismo resultado observable
   - [x] `received_at` del servidor —lo pica la Capa 3, desviación **14**—; `performed_at` sin tocar
 
-- [ ] **T10: Endpoint `POST /audit/logs`**
-  - [ ] `201` + `Location` + los 7 campos
-  - [ ] Repetido ⇒ `200` + `idempotent_replay: true` + `X-Idempotent-Replay: true`
-  - [ ] Body inválido / clave desconocida / `performed_at` sin offset ⇒ `400`
-  - [ ] `details` > `MAX_DETAILS_BYTES` ⇒ `413` sin escribir
-  - [ ] Checksum de formato arbitrario se acepta y persiste
-  - [ ] `details` ausente ⇒ `{}`; `details` anidado ⇒ verbatim
-  - [ ] `Location` con `quote(..., safe="")`
-  - [ ] `app/api/routers/` sin `pymongo` ni `app.repositories`
+- [x] **T10: Endpoint `POST /audit/logs`**
+  - [x] `201` + `Location` + los 7 campos
+  - [x] Repetido ⇒ `200` + `idempotent_replay: true` + `X-Idempotent-Replay: true`
+  - [x] Body inválido / clave desconocida / `performed_at` sin offset ⇒ `400`
+  - [x] `details` > `MAX_DETAILS_BYTES` ⇒ `413` sin escribir
+  - [x] Checksum de formato arbitrario se acepta y persiste
+  - [x] `details` ausente ⇒ `{}`; `details` anidado ⇒ verbatim
+  - [x] `Location` con `quote(..., safe="")`
+  - [x] `app/api/routers/` sin `pymongo` ni `app.repositories`
 
 - [ ] **T11: Carrera bajo concurrencia + replay**
   - [ ] N=10 concurrentes ⇒ exactamente 1 documento, 1 `201`, 9 `200` de replay
