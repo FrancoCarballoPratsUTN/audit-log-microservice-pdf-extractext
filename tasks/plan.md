@@ -4,7 +4,7 @@
 > Este archivo es el plan de ejecución; el checklist operativo vive en
 > [`todo.md`](./todo.md).
 >
-> **Estado:** en ejecución. T1–T10 cerradas y verificadas (294 tests, 100 % de
+> **Estado:** en ejecución. T1–T11 cerradas y verificadas (296 tests, 100 % de
 > cobertura de `app/`); el checklist de estado vive en [`todo.md`](./todo.md).
 
 ---
@@ -47,6 +47,7 @@ Se llenan durante la Fase 3.
 | **13** | T8 añade `tests/unit/repositories/test_mongo_audit_log_repository.py` y `tests/unit/repositories/test_protocol.py`, y define `ReplayDetected` en `app/repositories/protocol.py` | El plan sólo listaba `tests/unit/repositories/test_serialization.py` y el test de integración; no decía dónde vive la señal de replay | El AC «ningún `PyMongoError` escapa sin traducir» se decide rama a rama (`DuplicateKeyError`, `DocumentTooLarge`, `PyMongoError` genérico, errores que **no** son del driver): sin unitarios con una colección falsa, esa cobertura dependería de tener Mongo levantado y el gate del 100 % sería intermitente. La señal de replay es parte del contrato del puerto —la lanza la Capa 3 y la consume la Capa 2—, así que vive junto a `AuditLogRepository`. `test_protocol.py` cierra además el AC de T7 que no estaba verificado en ningún test: que el fake satisface el `Protocol` |
 | **14** | `received_at` lo pica la Capa 3 (`MongoAuditLogRepository.insert` con `datetime.now(UTC)`); el servicio no tiene reloj inyectable | T9: «`received_at` lo pone el reloj inyectable del servicio», y el flujo de SPEC §9 muestra `received_at = reloj de AUDA` en la Capa 2 | El puerto `insert(request)` de T7/T8 no recibe `received_at` ni lo expone `CreateAuditLogRequest`; inyectarle un reloj al servicio exigiría abrir una tarea cerrada y cambiar el contrato del puerto sin ganancia observable. El observable que importa (SPEC §5.2) es «`received_at` del servidor, no del emisor»: la Capa 3 usa el reloj del servidor y el test de T9 lo afirma con tolerancia. `performed_at` sí queda cubierto explícitamente como «el del emisor, sin tocar» |
 | **15** | T10 añade `tests/unit/api/routers/test_audit_logs_router.py`, tests de `AuditLogResponse.from_log` en `test_schemas.py`, un guard de imports en `test_package_layout.py`, y mueve el formateo RFC 3339 a `app/domain/models.rfc3339_utc` | El plan listaba sólo `tests/integration/api/test_create_audit_log.py`, y SPEC/plan dejaban el render de fechas en `serialization.py` (Capa 3) | La Capa 1 no puede importar `app.repositories` (AC de T10), así que el router no puede usar `render`. Si el endpoint viviera sólo en tests de integración, los unit de Capa 1 caerían en skipping cuando Mongo no está y el gate del 100 % sería intermitente —el mismo argumento que la desviación 13. `rfc3339_utc` pasa a la única capa que Capas 1 y 3 ven, y `serialization.render` la reutiliza: el formato llega al cable por una sola primitiva, que es lo que el docstring de `serialization.py` ya exigía. El guard de imports reemplaza un chequeo por substring por un `ast` (el docstring del router nombra `app.repositories` y haría un falso positivo) |
+| **16** | T11 despliega **dos** escenarios en `test_idempotency_race.py`: el vertical HTTP (N `POST` concurrentes) y una carrera a nivel servicio con `asyncio.gather` que cría el índice único con `ensure_indexes` antes de correr | El plan describía el escenario como «N peticiones `POST` concurrentes» (uno solo) y no decía que el test debiera crear los índices | El observable del HTTP (1 `201` + 9 `200`) es idéntico caiga el perdedor por la Barrera 1 o por la 2, así que **solo** no demuestra que la Barrera 2 se ejercite: si el servidor serializara las peticiones, la Barrera 1 cortaría a todos los perdedores y la mutación del AC quedaría sin detectar. El segundo escenario garantiza que los N pasan la Barrera 1 casi a la vez sobre una colección vacía y obliga al índice único a decidir: es el que hace **determinista** el AC «quitar la traducción de `DuplicateKeyError` rompe el test». El `ensure_indexes` es necesario porque `clean_collection` borra colección **e índices** (dev. 11): sin él, los N `insert` duplicados cabrían todos en una colección sin índice y el test mentiría |
 | — | — | — | — |
 
 ---
@@ -651,18 +652,19 @@ N-1 restantes `200` de replay. Y — esto es lo importante — comprobar por
 entre una defensa real y una decorativa.
 
 **Acceptance criteria:**
-- [ ] Con N=10 concurrentes: exactamente 1 documento, 1 `201`, 9 `200` de replay
-- [ ] **El test falla si se desactiva la traducción de `DuplicateKeyError`**
-- [ ] Repite el escenario 20 veces sin flakiness (sin `sleep`, sin polling)
-- [ ] El gate del test es la **Capa 3 real** sobre una colección instrumentada, no
+- [x] Con N=10 concurrentes: exactamente 1 documento, 1 `201`, 9 `200` de replay
+- [x] **El test falla si se desactiva la traducción de `DuplicateKeyError`**
+- [x] Repite el escenario 20 veces sin flakiness (sin `sleep`, sin polling)
+- [x] El gate del test es la **Capa 3 real** sobre una colección instrumentada, no
       un doble: con un fake, las 10 peticiones se serializarían solas y la
       Barrera 1 las cortaría todas, dejando la Barrera 2 sin exertir
 
 **Verification:**
-- [ ] `uv run pytest tests/integration/api/test_idempotency_race.py -v`
-- [ ] Manual: comentar la traducción de `DuplicateKeyError` ⇒ el test debe romper;
-      al restaurarlo, vuelve a verde
-- [ ] `uv run pytest` (suite completa verde)
+- [x] `uv run pytest tests/integration/api/test_idempotency_race.py -v`
+- [x] Manual: comentar la traducción de `DuplicateKeyError` ⇒ el test debe romper;
+      al restaurarlo, vuelve a verde — **verificado** (los dos tests rompen con
+      `E11000` crudo: el de servicio y el vertical HTTP)
+- [x] `uv run pytest` (suite completa verde: 296 tests, 100 % de cobertura)
 
 **Dependencies:** T10
 **Files:** `tests/integration/api/test_idempotency_race.py`

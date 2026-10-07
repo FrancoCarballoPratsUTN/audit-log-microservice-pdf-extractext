@@ -4,8 +4,9 @@
 > dependencias) está en [`plan.md`](./plan.md); el diseño en
 > [`../SPEC.md`](../SPEC.md).
 >
-> **Estado:** 10/16 tareas. T7–T10 cerradas y verificadas (294 tests, 100 % de
-> cobertura de `app/`); Checkpoint Core slice pendiente de T11 y revisión humana.
+> **Estado:** 11/16 tareas. T7–T11 cerradas y verificadas (296 tests, 100 % de
+> cobertura de `app/`); Core slice implementado — Checkpoint pendiente de
+> revisión humana.
 
 ---
 
@@ -126,22 +127,22 @@
   - [x] `Location` con `quote(..., safe="")`
   - [x] `app/api/routers/` sin `pymongo` ni `app.repositories`
 
-- [ ] **T11: Carrera bajo concurrencia + replay**
-  - [ ] N=10 concurrentes ⇒ exactamente 1 documento, 1 `201`, 9 `200` de replay
-  - [ ] **Desactivar la Barrera 2 rompe el test** (verificado por mutación)
-  - [ ] 20 repeticiones sin flakiness, sin `sleep` ni polling
-  - [ ] Gate sobre la Capa 3 real, no sobre el fake
+- [x] **T11: Carrera bajo concurrencia + replay**
+  - [x] N=10 concurrentes ⇒ exactamente 1 documento, 1 `201`, 9 `200` de replay
+  - [x] **Desactivar la Barrera 2 rompe el test** (verificado por mutación)
+  - [x] 20 repeticiones sin flakiness, sin `sleep` ni polling
+  - [x] Gate sobre la Capa 3 real, no sobre el fake
 
 ### Checkpoint: Core slice ★
-- [ ] `POST /audit/logs` ⇒ `201` + `Location` + 7 campos
-- [ ] Repetido ⇒ `200` + `X-Idempotent-Replay`
-- [ ] T11 verde: exactamente 1 documento bajo concurrencia
-- [ ] Replay por Barrera 1 y por Barrera 2
-- [ ] `details` ausente ⇒ `{}`; `text.delete` funciona
-- [ ] Checksum arbitrario aceptado
-- [ ] Clave desconocida ⇒ `400`; `details` anidado ⇒ `201`
-- [ ] Capas sin imports prohibidos (grep)
-- [ ] `pytest --cov=app --cov-fail-under=85` verde
+- [x] `POST /audit/logs` ⇒ `201` + `Location` + 7 campos
+- [x] Repetido ⇒ `200` + `X-Idempotent-Replay`
+- [x] T11 verde: exactamente 1 documento bajo concurrencia
+- [x] Replay por Barrera 1 y por Barrera 2
+- [x] `details` ausente ⇒ `{}`; `text.delete` funciona
+- [x] Checksum arbitrario aceptado
+- [x] Clave desconocida ⇒ `400`; `details` anidado ⇒ `201`
+- [x] Capas sin imports prohibidos (grep)
+- [x] `pytest --cov=app --cov-fail-under=85` verde (suite: 296 tests, 100 %)
 - [ ] **Revisión humana** — aprobado / rechazado (nota: ................................)
 
 ---
