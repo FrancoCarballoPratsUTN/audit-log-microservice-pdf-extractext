@@ -1,0 +1,27 @@
+# Keep the build context small and free of secrets.
+
+# Version control
+.git/
+.gitignore
+
+# Python caches and virtualenvs
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Secrets and local config (the example is harmless)
+.env
+.env.*
+!.env.example
+
+# Tests and the stress harness are not needed to run the service
+tests/
+tasks/
+*.md
+
+# Generated stress artefacts
+tests/stress/out/
+tests/stress/targets/

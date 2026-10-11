@@ -1,0 +1,57 @@
+services:
+  audit-log:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8000"
+    environment:
+      SERVICE_API_TOKEN: ${SERVICE_API_TOKEN:?SERVICE_API_TOKEN is required; copy .env.example to .env and set it}
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: ${MONGO_DATABASE:-pdf_extractext_audit}
+      MONGO_AUDIT_LOGS_COLLECTION: ${MONGO_AUDIT_LOGS_COLLECTION:-audit_logs}
+      MONGO_TIMEOUT_MS: ${MONGO_TIMEOUT_MS:-5000}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-1048576}
+      MAX_DETAILS_BYTES: ${MAX_DETAILS_BYTES:-65536}
+      DEFAULT_LIMIT: ${DEFAULT_LIMIT:-10}
+      MAX_LIMIT: ${MAX_LIMIT:-100}
+      MAX_SKIP: ${MAX_SKIP:-10000}
+      RETENTION_DAYS: ${RETENTION_DAYS:-0}
+      APP_NAME: ${APP_NAME:-Audit Log Microservice}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.audit.rule=Host(`audit.localhost`)
+      - traefik.http.routers.audit.entrypoints=web
+      - traefik.http.services.audit.loadbalancer.server.port=8000
+    networks:
+      - proxy
+      - audit-internal
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - audit-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - audit-internal
+    restart: unless-stopped
+
+volumes:
+  audit-mongo-data:
+
+networks:
+  proxy:
+    external: true
+    name: proxy
+  audit-internal:
+    name: audit-internal
+    internal: true
