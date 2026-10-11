@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Stress harness artefacts
+tests/stress/out/
+tests/stress/targets/

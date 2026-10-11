@@ -36,11 +36,37 @@ class AuditEventRequest(BaseModel):
     performed_at: AwareDatetime
 
 
-class AuditLogResponse(BaseModel):
-    """Un evento de auditoría almacenado, con la forma que espera `models.AuditLog`
-    en el orquestador.
+def _log_fields(log: AuditLog) -> dict[str, Any]:
+    """Los siete campos de `models.AuditLog` con el formato de SPEC §2.4.
 
-    `idempotent_replay` existe sólo en esta respuesta: nunca se persiste.
+    Compartido por la respuesta de escritura y por la de lectura: si cada una
+    formateara por su cuenta, los dos `GET` y el `POST` podrían llegar al
+    cable con formatos distintos que el orquestador acepta a ratos.
+
+    Args:
+        log: El registro de dominio a serializar.
+
+    Returns:
+        Los siete campos listos para construir el modelo, con `_id` en hex y
+        fechas RFC 3339 UTC con `Z`.
+    """
+    return {
+        "id": log.id,
+        "action": log.action,
+        "entity_type": log.entity_type,
+        "checksum": log.checksum,
+        "details": log.details,
+        "performed_at": rfc3339_utc(log.performed_at),
+        "received_at": rfc3339_utc(log.received_at),
+    }
+
+
+class AuditLogItem(BaseModel):
+    """Un evento almacenado con exactamente los 7 campos de `models.AuditLog`
+    (SPEC §2.4) — lo que decodifican los dos `GET` del cliente Go.
+
+    Sin `idempotent_replay`: ese campo sólo existe en la respuesta de escritura
+    y nunca se persiste, y los listados no son respuestas a una escritura.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -52,6 +78,27 @@ class AuditLogResponse(BaseModel):
     details: Any
     performed_at: str
     received_at: str
+
+    @classmethod
+    def from_log(cls, log: AuditLog) -> AuditLogItem:
+        """Construir el elemento desde el registro de dominio.
+
+        Args:
+            log: El registro leído de Capa 3.
+
+        Returns:
+            El cuerpo a serializar con `_id` y fechas UTC.
+        """
+        return cls(**_log_fields(log))
+
+
+class AuditLogResponse(AuditLogItem):
+    """Un evento de auditoría almacenado, con la forma que espera `models.AuditLog`
+    en el orquestador.
+
+    `idempotent_replay` existe sólo en esta respuesta: nunca se persiste.
+    """
+
     idempotent_replay: bool = False
 
     @classmethod
@@ -70,16 +117,7 @@ class AuditLogResponse(BaseModel):
         Returns:
             El cuerpo a serializar con `_id`, fechas UTC y el flag de replay.
         """
-        return cls(
-            id=log.id,
-            action=log.action,
-            entity_type=log.entity_type,
-            checksum=log.checksum,
-            details=log.details,
-            performed_at=rfc3339_utc(log.performed_at),
-            received_at=rfc3339_utc(log.received_at),
-            idempotent_replay=replay,
-        )
+        return cls(**_log_fields(log), idempotent_replay=replay)
 
 
 class ProblemDetails(BaseModel):

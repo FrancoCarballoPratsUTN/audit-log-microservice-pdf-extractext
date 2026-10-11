@@ -48,6 +48,10 @@ Se llenan durante la Fase 3.
 | **14** | `received_at` lo pica la Capa 3 (`MongoAuditLogRepository.insert` con `datetime.now(UTC)`); el servicio no tiene reloj inyectable | T9: «`received_at` lo pone el reloj inyectable del servicio», y el flujo de SPEC §9 muestra `received_at = reloj de AUDA` en la Capa 2 | El puerto `insert(request)` de T7/T8 no recibe `received_at` ni lo expone `CreateAuditLogRequest`; inyectarle un reloj al servicio exigiría abrir una tarea cerrada y cambiar el contrato del puerto sin ganancia observable. El observable que importa (SPEC §5.2) es «`received_at` del servidor, no del emisor»: la Capa 3 usa el reloj del servidor y el test de T9 lo afirma con tolerancia. `performed_at` sí queda cubierto explícitamente como «el del emisor, sin tocar» |
 | **15** | T10 añade `tests/unit/api/routers/test_audit_logs_router.py`, tests de `AuditLogResponse.from_log` en `test_schemas.py`, un guard de imports en `test_package_layout.py`, y mueve el formateo RFC 3339 a `app/domain/models.rfc3339_utc` | El plan listaba sólo `tests/integration/api/test_create_audit_log.py`, y SPEC/plan dejaban el render de fechas en `serialization.py` (Capa 3) | La Capa 1 no puede importar `app.repositories` (AC de T10), así que el router no puede usar `render`. Si el endpoint viviera sólo en tests de integración, los unit de Capa 1 caerían en skipping cuando Mongo no está y el gate del 100 % sería intermitente —el mismo argumento que la desviación 13. `rfc3339_utc` pasa a la única capa que Capas 1 y 3 ven, y `serialization.render` la reutiliza: el formato llega al cable por una sola primitiva, que es lo que el docstring de `serialization.py` ya exigía. El guard de imports reemplaza un chequeo por substring por un `ast` (el docstring del router nombra `app.repositories` y haría un falso positivo) |
 | **16** | T11 despliega **dos** escenarios en `test_idempotency_race.py`: el vertical HTTP (N `POST` concurrentes) y una carrera a nivel servicio con `asyncio.gather` que cría el índice único con `ensure_indexes` antes de correr | El plan describía el escenario como «N peticiones `POST` concurrentes» (uno solo) y no decía que el test debiera crear los índices | El observable del HTTP (1 `201` + 9 `200`) es idéntico caiga el perdedor por la Barrera 1 o por la 2, así que **solo** no demuestra que la Barrera 2 se ejercite: si el servidor serializara las peticiones, la Barrera 1 cortaría a todos los perdedores y la mutación del AC quedaría sin detectar. El segundo escenario garantiza que los N pasan la Barrera 1 casi a la vez sobre una colección vacía y obliga al índice único a decidir: es el que hace **determinista** el AC «quitar la traducción de `DuplicateKeyError` rompe el test». El `ensure_indexes` es necesario porque `clean_collection` borra colección **e índices** (dev. 11): sin él, los N `insert` duplicados cabrían todos en una colección sin índice y el test mentiría |
+| **17** | T12 valida `skip`/`limit` y aplica `DEFAULT_LIMIT` en la **Capa 1** (el router), no en `AuditLogService.list_page()` | T12 describía «`service.list_page()` (validación de `skip`/`limit` y aplicación de `DEFAULT_LIMIT`)» | SPEC §3.2 clasifica «`skip` / `limit` fuera de rango» como concern de **Capa 1** —«estructura de la query»—, igual que el resto de la estructura de entrada. Validar en Capa 2 obligaría al servicio a conocer `MAX_SKIP`/`MAX_LIMIT`/`DEFAULT_LIMIT` (configuración de transporte) y a lanzar `400`, que es traducción HTTP. La Capa 2 queda como traslado puro al puerto (`repo.list()`), y los AC y el resultado observable no cambian |
+| **18** | T13 amplía los unit existentes `tests/unit/api/routers/test_audit_logs_router.py`, `tests/unit/services/test_audit_log_service.py` y `tests/unit/repositories/test_mongo_audit_log_repository.py` | El plan listaba sólo `tests/integration/api/test_list_by_checksum.py` | El camino de integración exige Mongo: sin unit de Capa 1/2/3, el gate del 100 % de `app/` se volvería intermitente cuando no hay servidor —el mismo argumento que las desviaciones 13 y 15—. Los unit fijan lo que la integración no puede aislar (que el filtro es `{"checksum": c}` sin paginación, que el router reenvía el path y repite la forma de array), y la integración conserva lo que sólo se ve contra el índice real |
+| **19** | T14 monta el stack en el orden **`auth → RequestId → ContentType → BodySize → CORS → log`**, expuesto en un único `install_middleware(app, *, max_body_bytes)` que llaman `create_app` y los tests | La descripción de T14 enumeraba `auth → ContentType → BodySize → RequestId → CORS → log` (RequestId *después* del límite de body) | SPEC §4.4 (paso 2) y el diagrama de §8 sitúan `X-Request-ID` inmediatamente después de auth, antes de `Content-Type` y del límite de body. Con la enumeración literal, un `415`, un `413` y el `400` de Pydantic viajarían **sin** `X-Request-ID` —el middleware que lo añade no se habría ejecutado—, dejando sin correlacionar justo las respuestas de error, que son las que se investigan. El AC «orden `401 → 415 → 413 → 400`» no cambia. `CORS` queda por dentro de auth (coherente con auth *outermost* de T5): un preflight a una ruta protegida sigue siendo `401`, y el AC de preflight se verifica sobre la ruta abierta `/health` |
+| **20** | El AC de T3 «`4XX` declarado en `responses` para que FastAPI no inyecte `422` en el OpenAPI» se marca [x] pero no se cumple hasta T16 | T3 cerraba con el `422` *fuera* de las respuestas de OpenAPI (su checkpoint afirmaba «ninguna operación lista `422`») | **Comprobado empíricamente en T16**: `POST`, `GET /audit/logs` y `GET /audit/logs/checksum/{checksum}` publicaban un `422` (`fastapi.openapi.utils` lo añade cuando la operación tiene body o parámetros y **no** hay ya un `4XX`, `422` o `default` en `responses`). La ausencia de `4XX` pasó desapercibida porque el AC de T3 se verificó sobre el modelo aislado —los routers llegan en T10— y en T10/T12/T13 nadie volvió a mirar el `/openapi.json` completo. T16 añade el `4XX` a las tres rutas, con `model=ProblemDetails`, que documenta el cuerpo de toda la matriz y suprime el `422`; `tests/integration/api/test_openapi.py::test_no_operation_documents_422` lo fija en adelante |
 | — | — | — | — |
 
 ---
@@ -251,10 +255,10 @@ defensa anti-duplicados. Se verifican antes de seguir construyendo encima.
 
 ### Phase 4: Lecturas
 
-- [ ] **T12: `GET /audit/logs?skip&limit`** — **array de primer nivel**, orden
+- [x] **T12: `GET /audit/logs?skip&limit`** — **array de primer nivel**, orden
       `performed_at desc, _id desc`, límites validados, serialización de
       `_id` hex y fechas RFC 3339 `Z`.
-- [ ] **T13: `GET /audit/logs/checksum/{checksum}`** — path param, mismo orden,
+- [x] **T13: `GET /audit/logs/checksum/{checksum}`** — path param, mismo orden,
       `200 []` si no hay resultados.
 
 ### Checkpoint: Lecturas
@@ -269,19 +273,19 @@ defensa anti-duplicados. Se verifican antes de seguir construyendo encima.
 
 ### Phase 5: Endurecimiento y cierre
 
-- [ ] **T14: Middleware** — eco de `X-Request-ID`, `415`, `413` por body, CORS,
+- [x] **T14: Middleware** — eco de `X-Request-ID`, `415`, `413` por body, CORS,
       log de acceso con duración. Orden `401 → 415 → 413 → 400`.
-- [ ] **T15: Matriz de errores completa** — test parametrizado sobre las 8
+- [x] **T15: Matriz de errores completa** — test parametrizado sobre las 8
       filas de SPEC §7.2 + la garantía de que **ninguna ruta emite `422`**.
-- [ ] **T16: OpenAPI, README y cobertura** — esquema `Bearer` publicado,
+- [x] **T16: OpenAPI, README y cobertura** — esquema `Bearer` publicado,
       `/openapi.json` honesto, README operativo, cobertura ≥ 85 %.
 
 ### Checkpoint: Complete
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
-- [ ] `uv run ruff check .` y `uv run ruff format .` limpios
-- [ ] Las 8 filas de la matriz verificadas por test, sin `skip` ni `xfail`
-- [ ] Checklist de contrato SPEC §9 en verde
-- [ ] Criterios de éxito del SPEC cumplidos
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa (380 tests, 100 %)
+- [x] `uv run ruff check .` y `uv run ruff format .` limpios
+- [x] Las 8 filas de la matriz verificadas por test, sin `skip` ni `xfail`
+- [x] Checklist de contrato SPEC §9 en verde
+- [x] Criterios de éxito del SPEC cumplidos
 - [ ] **Listo para revisión final del humano**
 
 ---
@@ -754,18 +758,18 @@ POST), `BodySizeLimitMiddleware` (`413` por `MAX_BODY_BYTES` sobre
 único sitio, `create_app`, y hay tests que fijan el orden **real**.
 
 **Acceptance criteria:**
-- [ ] Orden correcto: `401 → 415 → 413 → 400`
-- [ ] Body de > 1 MiB ⇒ `413`; `Content-Type: text/plain` en POST ⇒ `415`
-- [ ] `X-Request-ID` entrante se devuelve igual; si falta, se genera uno
-- [ ] CORS responde al preflight (`200`, que es lo que emite Starlette; anotado
+- [x] Orden correcto: `401 → 415 → 413 → 400`
+- [x] Body de > 1 MiB ⇒ `413`; `Content-Type: text/plain` en POST ⇒ `415`
+- [x] `X-Request-ID` entrante se devuelve igual; si falta, se genera uno
+- [x] CORS responde al preflight (`200`, que es lo que emite Starlette; anotado
       en el test en vez de envolver la librería)
-- [ ] El límite mira `Content-Length` y **nunca** lee el body: una subida enorme
+- [x] El límite mira `Content-Length` y **nunca** lee el body: una subida enorme
       no entra en memoria
-- [ ] Un `Content-Length` ausente o no numérico cuenta como `0` en vez de reventar
+- [x] Un `Content-Length` ausente o no numérico cuenta como `0` en vez de reventar
 
 **Verification:**
-- [ ] `uv run pytest tests/unit/api/test_middleware.py`
-- [ ] Manual: sin token y body de 2 MiB ⇒ `401` (el auth va primero); con token
+- [x] `uv run pytest tests/unit/api/test_middleware.py`
+- [x] Manual: sin token y body de 2 MiB ⇒ `401` (el auth va primero); con token
       y `text/plain` y body de 2 MiB ⇒ `415`
 
 **Dependencies:** T10
@@ -784,19 +788,19 @@ el `code`. Cubre además la garantía derivada de `httpclient/client.go:39` — 
 **negativa**: **ninguna ruta emite `422`**.
 
 **Acceptance criteria:**
-- [ ] Las 8 filas de SPEC §7.2 cubiertas con su `status` y `code` esperados
-- [ ] Un test verifica la regla de `httpclient/client.go:39` para todo `>= 300`
-- [ ] Un test verifica que **ningún endpoint** devuelve `422` en ningún escenario
+- [x] Las 8 filas de SPEC §7.2 cubiertas con su `status` y `code` esperados
+- [x] Un test verifica la regla de `httpclient/client.go:39` para todo `>= 300`
+- [x] Un test verifica que **ningún endpoint** devuelve `422` en ningún escenario
       de la matriz
-- [ ] `PUT` y `DELETE` sobre `/audit/logs` ⇒ `405 METHOD_NOT_ALLOWED` (append-only)
-- [ ] Los faults se inyectan en la **base de datos**, no con `patch` sobre `app/`:
+- [x] `PUT` y `DELETE` sobre `/audit/logs` ⇒ `405 METHOD_NOT_ALLOWED` (append-only)
+- [x] Los faults se inyectan en la **base de datos**, no con `patch` sobre `app/`:
       así lo que se prueba es el mapeo driver → status de producción
-- [ ] Sin casos `xfail` ni `skip`
+- [x] Sin casos `xfail` ni `skip`
 
 **Verification:**
-- [ ] `uv run pytest tests/integration/api/test_error_matrix.py -v`
-- [ ] Manual: contrastar los IDs de los tests contra SPEC §7.2
-- [ ] **Mutación**: `status 503→500` en `AuditStorageError` ⇒ la fila en rojo
+- [x] `uv run pytest tests/integration/api/test_error_matrix.py -v`
+- [x] Manual: contrastar los IDs de los tests contra SPEC §7.2
+- [x] **Mutación**: `status 503→500` en `AuditStorageError` ⇒ la fila en rojo
 
 **Dependencies:** T12, T13, T14
 **Files:** `tests/integration/api/test_error_matrix.py`,
@@ -816,23 +820,23 @@ contrato, `curl` con el token por endpoint, cómo levantar MongoDB para los test
 de integración) y llevar la cobertura al umbral.
 
 **Acceptance criteria:**
-- [ ] `/openapi.json` documenta request, response y seguridad de las 3 rutas
-- [ ] El esquema de `AuditLogResponse` declara la propiedad **`_id`**
-- [ ] **Ninguna operación lista `422`** entre sus respuestas
-- [ ] `POST /audit/logs` documenta `201`, `400`, `401`, `413`, `415`
-- [ ] README con variables de entorno, arranque
+- [x] `/openapi.json` documenta request, response y seguridad de las 3 rutas
+- [x] El esquema de `AuditLogResponse` declara la propiedad **`_id`**
+- [x] **Ninguna operación lista `422`** entre sus respuestas
+- [x] `POST /audit/logs` documenta `201`, `400`, `401`, `413`, `415`
+- [x] README con variables de entorno, arranque
       (`uv run uvicorn app.main:create_app --factory --port 8083`, tal como
       SPEC §6.5), contrato, ejemplo `curl` por endpoint, y con cómo levantar el
       MongoDB que necesitan los tests
-- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa **sin excluir código de
+- [x] `uv run pytest --cov=app --cov-fail-under=85` pasa **sin excluir código de
       producción** para alcanzar el umbral
 
 **Verification:**
-- [ ] `uv run pytest --cov=app --cov-fail-under=85`
-- [ ] `uv run ruff check .` · `uv run ruff format --check .`
-- [ ] Manual: abrir `http://localhost:8083/docs` y comprobar las 3 rutas, el
+- [x] `uv run pytest --cov=app --cov-fail-under=85`
+- [x] `uv run ruff check .` · `uv run ruff format --check .`
+- [x] Manual: abrir `http://localhost:8083/docs` y comprobar las 3 rutas, el
       candado `Bearer`, `_id` en el schema de respuesta y la ausencia de `422`
-- [ ] Manual: contrastar los IDs de los tests contra la checklist de SPEC §9
+- [x] Manual: contrastar los IDs de los tests contra la checklist de SPEC §9
 
 **Dependencies:** T15
 **Files:** `app/api/routers/audit_logs.py`, `app/main.py`, `README.md`,
@@ -902,6 +906,11 @@ SPEC §2.7):
 5. Actualizar los 5 tests de `auditlog/client_test.go` con el header y añadir el
    caso `401` sin token.
 6. *(Opcional)* `ListByChecksum(skip, limit)` para acotar el listado por checksum.
+
+> **Estado de integración (Go, 9-oct-2026):** los puntos 1-5 están implementados y
+> verificados con TDD en `orchestator-microservices-pdf-extractext`
+> (`go build ./... && go vet ./... && go test ./...` en verde, con el caso `401`
+> sin reintento). El punto 6 (opcional) sigue pendiente.
 
 > **Orden de despliegue:** AUDA **no puede arrancar** sin `SERVICE_API_TOKEN`, así
 > que los puntos 1-4 son un prerrequisito del despliegue de AUDA, no un trabajo

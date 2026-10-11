@@ -4,9 +4,9 @@
 > dependencias) está en [`plan.md`](./plan.md); el diseño en
 > [`../SPEC.md`](../SPEC.md).
 >
-> **Estado:** 11/16 tareas. T7–T11 cerradas y verificadas (296 tests, 100 % de
-> cobertura de `app/`); Core slice implementado — Checkpoint pendiente de
-> revisión humana.
+> **Estado:** 16/16 tareas. T7–T16 cerradas y verificadas (380 tests, 100 % de
+> cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento del
+> transporte, la matriz de errores y el OpenAPI implementados.
 
 ---
 
@@ -149,67 +149,71 @@
 
 ## Phase 4: Lecturas
 
-- [ ] **T12: `GET /audit/logs?skip&limit`**
-  - [ ] **Array de primer nivel** (el test afirma `isinstance(body, list)`)
-  - [ ] 7 campos por elemento, sin nulos
-  - [ ] `_id` hex de 24 chars; fechas RFC 3339 UTC con `Z`
-  - [ ] Orden `performed_at desc` con desempate estable por `_id`
-  - [ ] `skip`/`limit` fuera de rango ⇒ `400`, nunca recorte
-  - [ ] Sin resultados ⇒ `200` + `[]`
-  - [ ] El `GET` no registra evento de auditoría
+- [x] **T12: `GET /audit/logs?skip&limit`**
+  - [x] `repo.list()` — `find().sort(performed_at desc, _id desc).skip().limit()`
+  - [x] `service.list_page()` traslada la página ya validada a Capa 3
+  - [x] `AuditLogItem` (7 campos, sin `idempotent_replay`) y `GET` con **array de primer nivel** (el test afirma `isinstance(body, list)`)
+  - [x] 7 campos por elemento, sin nulos
+  - [x] `_id` hex de 24 chars; fechas RFC 3339 UTC con `Z`
+  - [x] Orden `performed_at desc` con desempate estable por `_id` (verificado contra Mongo)
+  - [x] `skip`/`limit` fuera de rango ⇒ `400`, nunca recorte; `limit` ausente ⇒ `DEFAULT_LIMIT`
+  - [x] Sin resultados ⇒ `200` + `[]`
+  - [x] El `GET` no registra evento de auditoría
 
-- [ ] **T13: `GET /audit/logs/checksum/{checksum}`**
-  - [ ] Path exacto `/audit/logs/checksum/{valor}`
-  - [ ] Filtra sólo por `checksum`, con el orden de SPEC §8.1
-  - [ ] Sin `.limit()` en el cursor (D12)
-  - [ ] Sin resultados ⇒ `200` + `[]`, nunca `404`
-  - [ ] `/audit/logs/checksum/` sin valor ⇒ `404`, no `500`
-  - [ ] También array de primer nivel
+- [x] **T13: `GET /audit/logs/checksum/{checksum}`**
+  - [x] `repo.find_by_checksum()` — `find({"checksum": c}).sort(performed_at desc, _id desc)`
+  - [x] `service.list_by_checksum()` traslada el filtro a Capa 3
+  - [x] Path exacto `/audit/logs/checksum/{valor}` (`client_test.go:156`)
+  - [x] Filtra sólo por `checksum`, con el orden de SPEC §8.1
+  - [x] Sin `.skip()`/`.limit()` en el cursor (D12)
+  - [x] Sin resultados ⇒ `200` + `[]`, nunca `404`
+  - [x] `/audit/logs/checksum/` sin valor ⇒ `404`, no `500`
+  - [x] También array de primer nivel
 
 ### Checkpoint: Lecturas
-- [ ] Ambos `GET` devuelven array JSON de primer nivel
-- [ ] 7 campos por elemento, sin nulos
-- [ ] `_id` hex de 24 chars; fechas con `Z` parseables por `time.Time`
-- [ ] Orden estable entre dos llamadas iguales
-- [ ] `skip`/`limit` inválidos ⇒ `400`, sin recorte
-- [ ] Checksum sin resultados ⇒ `200` + `[]`
-- [ ] Checklist de contrato SPEC §9 en verde
+- [x] Ambos `GET` devuelven array JSON de primer nivel
+- [x] 7 campos por elemento, sin nulos
+- [x] `_id` hex de 24 chars; fechas con `Z` parseables por `time.Time`
+- [x] Orden estable entre dos llamadas iguales
+- [x] `skip`/`limit` inválidos ⇒ `400`, sin recorte
+- [x] Checksum sin resultados ⇒ `200` + `[]`
+- [x] Checklist de contrato SPEC §9 en verde (T12/T13)
 - [ ] **Revisión humana** — aprobado / rechazado (nota: ................................)
 
 ---
 
 ## Phase 5: Endurecimiento y cierre
 
-- [ ] **T14: Middleware**
-  - [ ] Orden `401 → 415 → 413 → 400`, con test que fija el orden real
-  - [ ] Body > `MAX_BODY_BYTES` ⇒ `413`; `Content-Type` incorrecto en POST ⇒ `415`
-  - [ ] Eco de `X-Request-ID`; generación si falta
-  - [ ] CORS con `GET, POST, OPTIONS`
-  - [ ] Log de acceso con duración
-  - [ ] El límite mira `Content-Length` y nunca lee el body
+- [x] **T14: Middleware**
+  - [x] Orden `401 → 415 → 413 → 400`, con test que fija el orden real
+  - [x] Body > `MAX_BODY_BYTES` ⇒ `413`; `Content-Type` incorrecto en POST ⇒ `415`
+  - [x] Eco de `X-Request-ID`; generación si falta
+  - [x] CORS con `GET, POST, OPTIONS`
+  - [x] Log de acceso con duración
+  - [x] El límite mira `Content-Length` y nunca lee el body
 
-- [ ] **T15: Matriz de errores completa**
-  - [ ] Las 8 filas de SPEC §7.2 con su `status` y `code`
-  - [ ] Regla de `httpclient/client.go:39`: todo `>= 300` devuelve body parseable
-  - [ ] Garantía negativa: ningún endpoint devuelve `422`
-  - [ ] `PUT` y `DELETE` ⇒ `405 METHOD_NOT_ALLOWED`
-  - [ ] Faults inyectados en la base de datos, no con `patch` sobre `app/`
-  - [ ] Sin `xfail` ni `skip`
+- [x] **T15: Matriz de errores completa**
+  - [x] Las 8 filas de SPEC §7.2 con su `status` y `code`
+  - [x] Regla de `httpclient/client.go:39`: todo `>= 300` devuelve body parseable
+  - [x] Garantía negativa: ningún endpoint devuelve `422`
+  - [x] `PUT` y `DELETE` ⇒ `405 METHOD_NOT_ALLOWED`
+  - [x] Faults inyectados en la base de datos, no con `patch` sobre `app/`
+  - [x] Sin `xfail` ni `skip`
 
-- [ ] **T16: OpenAPI, README y cobertura**
-  - [ ] `/openapi.json` documenta request, response y `Bearer` en las 3 rutas
-  - [ ] El schema declara `_id`
-  - [ ] Ninguna operación lista `422`
-  - [ ] `POST /audit/logs` documenta `201`, `400`, `401`, `413`, `415`
-  - [ ] README: variables, arranque (`uvicorn app.main:create_app --factory --port 8083`), contrato, `curl` por endpoint, cómo levantar MongoDB para los tests
-  - [ ] `pytest --cov=app --cov-fail-under=85` sin excluir producción
+- [x] **T16: OpenAPI, README y cobertura**
+  - [x] `/openapi.json` documenta request, response y `Bearer` en las 3 rutas
+  - [x] El schema declara `_id`
+  - [x] Ninguna operación lista `422`
+  - [x] `POST /audit/logs` documenta `201`, `400`, `401`, `413`, `415`
+  - [x] README: variables, arranque (`uvicorn app.main:create_app --factory --port 8083`), contrato, `curl` por endpoint, cómo levantar MongoDB para los tests
+  - [x] `pytest --cov=app --cov-fail-under=85` sin excluir producción
 
 ### Checkpoint: Complete
-- [ ] Suite completa verde con `--cov-fail-under=85`
-- [ ] `ruff check` · `ruff format --check` limpios
-- [ ] 8 filas de la matriz por test, sin `skip` ni `xfail`
-- [ ] Checklist SPEC §9 en verde
-- [ ] Criterios de éxito del SPEC cumplidos
+- [x] Suite completa verde con `--cov-fail-under=85` (380 tests, 100 % de cobertura)
+- [x] `ruff check` · `ruff format --check` limpios
+- [x] 8 filas de la matriz por test, sin `skip` ni `xfail`
+- [x] Checklist SPEC §9 en verde
+- [x] Criterios de éxito del SPEC cumplidos
 - [ ] Listo para revisión final del humano
 
 ---
@@ -220,13 +224,18 @@
 > los puntos 1-4 deben estar en el cliente Go **antes** del primer arranque de
 > AUDA. Detalle con archivos y líneas en SPEC §2.7.
 
-- [ ] 1. `AUDIT_LOG_API_TOKEN` en `internal/config/config.go`, **sin default**
-- [ ] 2. `httpclient.New(baseURL, timeout, token)` + `Authorization: Bearer` en **todas** las requests
-- [ ] 3. `cmd/orchestrator/main.go:35` propaga el token a `auditlog.NewClient(...)`
-- [ ] 4. `internal/clients/auditlog/client.go:25` propaga el token al cliente
-- [ ] 5. `internal/services/audit_service.go:38` — un `401` es error de cableado: `logger.Error`, sin reintento
-- [ ] 6. Actualizar los 5 tests de `internal/clients/auditlog/client_test.go` con el header y añadir el caso `401` sin token
+- [x] 1. `AUDIT_LOG_API_TOKEN` en `internal/config/config.go`, **sin default**
+- [x] 2. `httpclient.New(baseURL, timeout, token)` + `Authorization: Bearer` en **todas** las requests
+- [x] 3. `cmd/orchestrator/main.go:35` propaga el token a `auditlog.NewClient(...)`
+- [x] 4. `internal/clients/auditlog/client.go:25` propaga el token al cliente
+- [x] 5. `internal/services/audit_service.go:38` - un `401` es error de cableado: `logger.Error`, sin reintento
+- [x] 6. Actualizar los 5 tests de `internal/clients/auditlog/client_test.go` con el header y añadir el caso `401` sin token
 - [ ] 7. *(Opcional)* `ListByChecksum(skip, limit)` para acotar el listado por checksum
+
+> **Estado (Go, 9-oct-2026):** puntos 1-6 implementados y verificados con TDD en
+> `orchestator-microservices-pdf-extractext` — `go build ./... && go vet ./... && go test ./...`
+> en verde, incluido el caso `401` sin reintento. Token de AUDA generado y
+> colocado en su `.env` (`SERVICE_API_TOKEN`). Punto 7 (opcional) no implementado.
 
 ---
 

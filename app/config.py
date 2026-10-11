@@ -62,7 +62,9 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
 
     Args:
         environ: Entorno explícito del que leer, para los tests. Si se omite se
-            leen el entorno del proceso y el fichero `.env`.
+            leen el entorno del proceso y el fichero `.env`; si se aporta, el
+            fichero `.env` se ignora, para que un test no dependa de la
+            configuración local del que lo ejecute.
 
     Returns:
         La configuración validada.
@@ -73,4 +75,7 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
     """
     if environ is None:
         return Settings()
-    return Settings(**{key.lower(): value for key, value in environ.items()})
+    return Settings(
+        _env_file=None,
+        **{key.lower(): value for key, value in environ.items()},
+    )

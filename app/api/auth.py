@@ -16,6 +16,7 @@ API no se puede mapear desde fuera.
 import logging
 import secrets
 
+from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
@@ -27,6 +28,13 @@ logger = logging.getLogger(__name__)
 
 SCHEME = "Bearer"
 PUBLIC_PATHS = frozenset({"/health", "/readyz"})
+
+# Sólo documentación: el candado `Bearer` que /docs necesita para enviar el token
+# y el esquema de seguridad que `/openapi.json` publica. La autorización real la
+# hace `BearerAuthMiddleware` antes del enrutado; `auto_error=False` para que este
+# dependency no emita un `403` propio que duplicaría —y contradiría— el `401` del
+# middleware (SPEC §4.2).
+bearer_scheme = HTTPBearer(auto_error=False, scheme_name=SCHEME)
 
 REASON_MISSING = "missing header"
 REASON_EMPTY = "empty credential"

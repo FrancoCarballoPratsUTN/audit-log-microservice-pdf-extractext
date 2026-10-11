@@ -172,6 +172,7 @@ def test_the_app_refuses_to_build_without_a_token(
     """El orden de §6.5 es «resolver, luego abrir»: sin token no hay cliente que
     abrir, y `create_app` lo vigila antes de tocar Mongo."""
     monkeypatch.delenv("SERVICE_API_TOKEN", raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
     with pytest.raises(ValidationError, match="service_api_token"):
         create_app()

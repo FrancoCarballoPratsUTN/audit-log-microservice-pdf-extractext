@@ -34,6 +34,7 @@ TOKEN = "s3cr3t-shared-token"
 def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for variable in Settings.model_fields:
         monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture

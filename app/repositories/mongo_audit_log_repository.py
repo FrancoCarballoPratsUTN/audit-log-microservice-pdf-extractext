@@ -1,8 +1,8 @@
-"""Capa 3: el repositorio de escritura sobre MongoDB.
+"""Capa 3: el repositorio sobre MongoDB.
 
-Cumple el contrato de `protocol.AuditLogRepository` estructuralmente; hoy sólo
-`insert` y `find_replay`, que es lo que T8 necesita (el resto llega con T12 y
-T13).
+Cumple el contrato de `protocol.AuditLogRepository` estructuralmente: hoy
+`insert`, `find_replay`, `list` (T12) y `find_by_checksum` (T13); `count` queda
+como capacidad del puerto aún sin uso.
 
 Traduce las excepciones del driver según SPEC §6.4 y sólo esas:
 `DuplicateKeyError` es la señal de replay (Barrera 2 de §5.3), `DocumentTooLarge`
@@ -104,6 +104,66 @@ class MongoAuditLogRepository:
         if document is None:
             return None
         return to_audit_log(document)
+
+    async def list(self, *, skip: int = 0, limit: int = 100) -> list[AuditLog]:
+        """Leer una página ordenada `performed_at desc, _id desc` (SPEC §8.1).
+
+        El orden se fija aquí, junto al índice compuesto de §6.3 que lo
+        respalda: sin `_id` en la clave de orden, dos eventos con el mismo
+        `performed_at` podían paginar de forma no determinista entre dos
+        llamadas con el mismo `skip`/`limit`.
+
+        Args:
+            skip: Elementos a omitir.
+            limit: Tamaño máximo de la página.
+
+        Returns:
+            Los registros de la página, con `_id` en hex de 24 caracteres y
+            fechas UTC; vacío si no hay coincidencias.
+
+        Raises:
+            AuditStorageError: Si el driver falla al leer o al iterar el
+                cursor, con el mismo criterio que `insert`.
+        """
+        try:
+            cursor = (
+                self._collection.find({})
+                .sort([("performed_at", -1), ("_id", -1)])
+                .skip(skip)
+                .limit(limit)
+            )
+            return [to_audit_log(document) async for document in cursor]
+        except PyMongoError as exc:
+            raise AuditStorageError(STORAGE_UNAVAILABLE) from exc
+
+    async def find_by_checksum(self, checksum: str) -> list[AuditLog]:
+        """Leer los eventos de un checksum, ordenados como el índice §6.3.
+
+        El filtro es igualdad exacta sobre un checksum **opaco** (SPEC §5.2):
+        no se normaliza ni se valida el formato. El orden `performed_at desc,
+        _id desc` es el del índice compuesto `(checksum, performed_at desc,
+        _id desc)`, así que Mongo lo sirve sin ordenar en memoria, y el `_id`
+        garantiza el desempate estable. Sin `.skip()`/`.limit()` a propósito:
+        el cliente Go no pagina este listado (D12).
+
+        Args:
+            checksum: El checksum a filtrar, tal como llega del path.
+
+        Returns:
+            Los registros de ese checksum, con `_id` en hex y fechas UTC;
+            vacío si no hay coincidencias.
+
+        Raises:
+            AuditStorageError: Si el driver falla al leer o al iterar el
+                cursor, con el mismo criterio que `list`.
+        """
+        try:
+            cursor = self._collection.find({"checksum": checksum}).sort(
+                [("performed_at", -1), ("_id", -1)]
+            )
+            return [to_audit_log(document) async for document in cursor]
+        except PyMongoError as exc:
+            raise AuditStorageError(STORAGE_UNAVAILABLE) from exc
 
 
 __all__ = ["MongoAuditLogRepository"]

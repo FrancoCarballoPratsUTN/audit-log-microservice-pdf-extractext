@@ -58,12 +58,17 @@ class RecordingCollection:
         insert_error: Exception | None = None,
         find_result: dict[str, object] | None = None,
         find_error: Exception | None = None,
+        documents: list[dict[str, object]] | None = None,
     ) -> None:
         self.insert_error = insert_error
         self.find_result = find_result
         self.find_error = find_error
+        self.documents = list(documents or [])
         self.inserted: list[dict[str, object]] = []
         self.queries: list[dict[str, object]] = []
+        self.sorts: list[object] = []
+        self.skips: list[int] = []
+        self.limits: list[int] = []
 
     async def insert_one(self, document: dict[str, object]) -> None:
         if self.insert_error is not None:
@@ -75,6 +80,48 @@ class RecordingCollection:
         if self.find_error is not None:
             raise self.find_error
         return self.find_result
+
+    def find(self, query: dict[str, object]) -> RecordingCursor:
+        self.queries.append(query)
+        return RecordingCursor(self)
+
+
+class RecordingCursor:
+    """Cursor en memoria: registra `sort`/`skip`/`limit` y devuelve los
+    documentos sin aplicarlos. Repartir esas responsabilidades es a propósito:
+    el orden y el corte los ejecuta Mongo —aquí sólo se fija lo que el
+    repositorio le pide, igual que `test_find_replay_queries_exactly_the_...`
+    fija la consulta sin ejecutarla—, y la comprobación de que el orden real
+    es el de SPEC §8.1 vive contra el servidor en
+    `tests/integration/api/test_list_audit_logs.py`."""
+
+    def __init__(self, collection: RecordingCollection) -> None:
+        self._collection = collection
+
+    def sort(self, spec: object) -> RecordingCursor:
+        self._collection.sorts.append(spec)
+        return self
+
+    def skip(self, value: int) -> RecordingCursor:
+        self._collection.skips.append(value)
+        return self
+
+    def limit(self, value: int) -> RecordingCursor:
+        self._collection.limits.append(value)
+        return self
+
+    def __aiter__(self) -> RecordingCursor:
+        self._index = 0
+        return self
+
+    async def __anext__(self) -> dict[str, object]:
+        if self._collection.find_error is not None:
+            raise self._collection.find_error
+        if self._index >= len(self._collection.documents):
+            raise StopAsyncIteration
+        document = self._collection.documents[self._index]
+        self._index += 1
+        return document
 
 
 async def test_insert_stores_the_document_and_returns_the_stored_log() -> None:
@@ -236,3 +283,91 @@ async def test_find_replay_does_not_translate_a_programming_error() -> None:
             checksum=CHECKSUM,
             performed_at=PERFORMED_AT,
         )
+
+
+async def test_list_sorts_by_performed_at_then_id_desc_and_pages() -> None:
+    """SPEC §8.1: el listado global no filtra —son todos los eventos— y pide
+    el orden exacto del índice compuesto de §6.3, con el `_id` descendente
+    como desempate. Sin esa clave, dos eventos simultáneos podían paginar de
+    forma distinta en dos llamadas idénticas."""
+    collection = RecordingCollection(documents=[make_document()])
+
+    await MongoAuditLogRepository(collection).list(skip=5, limit=20)
+
+    assert collection.queries == [{}]
+    assert collection.sorts == [[("performed_at", -1), ("_id", -1)]]
+    assert collection.skips == [5]
+    assert collection.limits == [20]
+
+
+async def test_list_returns_the_page_mapped_to_domain_logs() -> None:
+    """La página llega como registros de dominio: `_id` hex y fechas con zona."""
+    first = make_document()
+    second = make_document(checksum="otro-checksum")
+    collection = RecordingCollection(documents=[first, second])
+
+    logs = await MongoAuditLogRepository(collection).list(skip=0, limit=100)
+
+    assert [log.id for log in logs] == [str(first["_id"]), str(second["_id"])]
+    assert logs[0].checksum == CHECKSUM
+    assert logs[0].details == first["details"]
+
+
+async def test_list_reports_a_storage_failure() -> None:
+    """La lectura del listado falla como las demás: `503` reintentable."""
+    collection = RecordingCollection(find_error=PyMongoError("localhost:27017 down"))
+
+    with pytest.raises(AuditStorageError):
+        await MongoAuditLogRepository(collection).list()
+
+
+async def test_list_does_not_translate_a_programming_error() -> None:
+    """Un fallo de mapeo (un documento sin los campos de §6.2) sube intacto:
+    no es una indisponibilidad del almacenamiento."""
+    collection = RecordingCollection(documents=[{"_id": ObjectId()}])
+
+    with pytest.raises(KeyError):
+        await MongoAuditLogRepository(collection).list()
+
+
+async def test_find_by_checksum_filters_and_sorts_without_pagination() -> None:
+    """SPEC §8.1 / D12: la consulta filtra sólo por `checksum` y ordena con la
+    misma clave que el índice compuesto de §6.3, **sin** `.skip()` ni
+    `.limit()` — el cliente Go no pagina el listado por checksum."""
+    collection = RecordingCollection(documents=[make_document()])
+
+    await MongoAuditLogRepository(collection).find_by_checksum(CHECKSUM)
+
+    assert collection.queries == [{"checksum": CHECKSUM}]
+    assert collection.sorts == [[("performed_at", -1), ("_id", -1)]]
+    assert collection.skips == []
+    assert collection.limits == []
+
+
+async def test_find_by_checksum_returns_the_matches_as_domain_logs() -> None:
+    """Las coincidencias llegan como registros de dominio: `_id` hex y fechas
+    con zona, igual que en el listado global."""
+    first = make_document()
+    second = make_document(checksum="otro-checksum")
+    collection = RecordingCollection(documents=[first, second])
+
+    logs = await MongoAuditLogRepository(collection).find_by_checksum(CHECKSUM)
+
+    assert [log.id for log in logs] == [str(first["_id"]), str(second["_id"])]
+    assert logs[0].checksum == CHECKSUM
+
+
+async def test_find_by_checksum_reports_a_storage_failure() -> None:
+    """La lectura por checksum falla como las demás: `503` reintentable."""
+    collection = RecordingCollection(find_error=PyMongoError("localhost:27017 down"))
+
+    with pytest.raises(AuditStorageError):
+        await MongoAuditLogRepository(collection).find_by_checksum(CHECKSUM)
+
+
+async def test_find_by_checksum_does_not_translate_a_programming_error() -> None:
+    """Un fallo de mapeo sube intacto: no es una indisponibilidad del storage."""
+    collection = RecordingCollection(documents=[{"_id": ObjectId()}])
+
+    with pytest.raises(KeyError):
+        await MongoAuditLogRepository(collection).find_by_checksum(CHECKSUM)

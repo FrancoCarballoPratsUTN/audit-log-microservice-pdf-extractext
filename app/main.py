@@ -20,8 +20,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.auth import BearerAuthMiddleware
 from app.api.exception_handlers import register_exception_handlers
+from app.api.middleware import install_middleware
 from app.api.routers.audit_logs import router as audit_logs_router
 from app.api.routers.health import router as health_router
 from app.config import Settings, get_settings
@@ -88,10 +88,10 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     register_exception_handlers(app)
 
-    # Registrarlo el último lo hace el más externo: la autenticación tiene que
-    # responder antes del enrutado, antes del `415` y antes del `413`
-    # (SPEC §4.3).
-    app.add_middleware(BearerAuthMiddleware)
+    # El stack de middleware se monta en un solo sitio, `install_middleware`, con
+    # la autenticación *outermost*: su `401` tiene que responder antes del
+    # enrutado, antes del `415` y antes del `413` (SPEC §4.3).
+    install_middleware(app, max_body_bytes=settings.max_body_bytes)
 
     app.include_router(health_router)
     app.include_router(audit_logs_router)

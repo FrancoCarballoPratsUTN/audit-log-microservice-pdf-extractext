@@ -14,6 +14,7 @@ La persistencia real y "el documento existe en Mongo" son de
 from datetime import UTC, datetime
 from urllib.parse import quote
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -35,7 +36,12 @@ VALID_EVENT = {
 }
 
 
-def _app(service: SpyingService, *, max_details_bytes: int) -> FastAPI:
+def _app(
+    service: SpyingService,
+    *,
+    max_details_bytes: int = 65536,
+    default_limit: int = 10,
+) -> FastAPI:
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(audit_logs_router)
@@ -43,6 +49,7 @@ def _app(service: SpyingService, *, max_details_bytes: int) -> FastAPI:
         environ={
             "SERVICE_API_TOKEN": "test",
             "MAX_DETAILS_BYTES": str(max_details_bytes),
+            "DEFAULT_LIMIT": str(default_limit),
         }
     )
     app.state.audit_log_service = service
@@ -65,19 +72,49 @@ class SpyingService:
     """Doble del servicio: devuelve un resultado prefijado y registra las
     órdenes, para poder afirmar que una petición `413` nunca lo alcanza."""
 
-    def __init__(self, result: CreateResult) -> None:
+    def __init__(
+        self,
+        result: CreateResult | None = None,
+        *,
+        items: list[AuditLog] | None = None,
+    ) -> None:
         self.result = result
+        self.list_items = list(items or [])
         self.created: list[CreateAuditLogRequest] = []
+        self.list_calls: list[tuple[int, int]] = []
+        self.checksum_calls: list[str] = []
 
     async def create(self, request: CreateAuditLogRequest) -> CreateResult:
         self.created.append(request)
+        if self.result is None:
+            raise AssertionError(
+                "SpyingService.create recibió una llamada sin resultado"
+            )
         return self.result
+
+    async def list_page(self, *, skip: int, limit: int) -> list[AuditLog]:
+        self.list_calls.append((skip, limit))
+        return self.list_items
+
+    async def list_by_checksum(self, checksum: str) -> list[AuditLog]:
+        self.checksum_calls.append(checksum)
+        return self.list_items
 
 
 def _post(service: SpyingService, *payloads: dict, limit: int = 65536):
     client = TestClient(_app(service, max_details_bytes=limit))
     responses = [client.post("/audit/logs", json=payload) for payload in payloads]
     return responses[0] if len(responses) == 1 else responses
+
+
+def _get(service: SpyingService, *, default_limit: int = 10, **params: object):
+    client = TestClient(_app(service, default_limit=default_limit))
+    return client.get("/audit/logs", params=params)
+
+
+def _get_by_checksum(service: SpyingService, checksum: str):
+    client = TestClient(_app(service))
+    return client.get(f"/audit/logs/checksum/{checksum}")
 
 
 def test_a_created_event_returns_201_with_location_and_the_seven_fields() -> None:
@@ -164,3 +201,113 @@ def test_an_invalid_body_is_400_before_the_service() -> None:
     assert response.status_code == 400
     assert response.json()["code"] == "VALIDATION_ERROR"
     assert service.created == []
+
+
+def test_list_returns_a_top_level_array_with_the_seven_decodable_fields() -> None:
+    """SPEC §2.4 y AC del plan: el `GET` responde un **array de primer nivel** y
+    cada elemento lleva exactamente los 7 campos de `models.AuditLog` — sin el
+    `idempotent_replay` que sólo existe en la respuesta de escritura."""
+    service = SpyingService(items=[_log()])
+
+    response = _get(service)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 1
+    assert set(body[0]) == {
+        "_id",
+        "action",
+        "entity_type",
+        "checksum",
+        "details",
+        "performed_at",
+        "received_at",
+    }
+    assert len(body[0]["_id"]) == 24
+    assert body[0]["performed_at"].endswith("Z")
+    assert body[0]["received_at"].endswith("Z")
+
+
+def test_list_forwards_skip_and_limit_to_the_service() -> None:
+    service = SpyingService(items=[])
+
+    response = _get(service, skip=5, limit=20)
+
+    assert response.status_code == 200
+    assert service.list_calls == [(5, 20)]
+
+
+def test_list_applies_the_configured_default_limit() -> None:
+    """`limit` ausente ⇒ `DEFAULT_LIMIT` del despliegue (coincide con el del
+    orquestador, SPEC `DEFAULT_LIMIT`), aplicado en la Capa 1."""
+    service = SpyingService(items=[])
+
+    response = _get(service, default_limit=7)
+
+    assert response.status_code == 200
+    assert service.list_calls == [(0, 7)]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"skip": -1}, {"skip": 10001}, {"limit": 0}, {"limit": 101}],
+)
+def test_list_rejects_out_of_range_pagination_with_400(params: dict[str, int]) -> None:
+    """SPEC §5.2: el rango se rechaza, **nunca** se recorta; `400 VALIDATION_ERROR`
+    como el body inválido, y el servicio ni se entera."""
+    service = SpyingService(items=[])
+
+    response = _get(service, **params)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert service.list_calls == []
+
+
+def test_list_with_no_results_returns_an_empty_array() -> None:
+    response = _get(SpyingService(items=[]))
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_by_checksum_returns_a_top_level_array_with_the_seven_fields() -> None:
+    """SPEC §8.1: el listado por checksum repite la forma de la lectura global
+    —array de primer nivel, 7 campos— sin el `idempotent_replay` de escritura."""
+    service = SpyingService(items=[_log()])
+
+    response = _get_by_checksum(service, "9f86d081884c7d659a2feaa0c55ad015")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 1
+    assert set(body[0]) == {
+        "_id",
+        "action",
+        "entity_type",
+        "checksum",
+        "details",
+        "performed_at",
+        "received_at",
+    }
+    assert body[0]["_id"] == "6f1c9a2b3d4e5f60718293a4"
+    assert body[0]["performed_at"].endswith("Z")
+
+
+def test_list_by_checksum_forwards_the_path_value_to_the_service() -> None:
+    service = SpyingService(items=[])
+
+    response = _get_by_checksum(service, "abc123")
+
+    assert response.status_code == 200
+    assert service.checksum_calls == ["abc123"]
+
+
+def test_list_by_checksum_with_no_results_returns_an_empty_array() -> None:
+    """`client_test.go:170`: sin resultados es `200 []`, nunca `404`."""
+    response = _get_by_checksum(SpyingService(items=[]), "checksum-inexistente")
+
+    assert response.status_code == 200
+    assert response.json() == []

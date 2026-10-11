@@ -1,4 +1,4 @@
-"""`AuditLogService.create`: el caso de uso de escritura (SPEC §5.3).
+"""`AuditLogService`: los casos de uso de escritura y lectura (SPEC §5.3, §8.1).
 
 El fake de `tests/fakes/fake_repository.py` es el doble real de la Capa 3: la
 orquestación no se prueba contra el driver, se prueba contra un contrato en
@@ -11,7 +11,7 @@ insert con `DuplicateKeyError`, segunda lectura con ganador), así que se modela
 con un doble mínimo por test, igual que en `test_mongodb_lifecycle.py`.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -176,3 +176,35 @@ async def test_a_duplicate_that_cannot_be_read_back_is_a_storage_error() -> None
     esconde ni un crash."""
     with pytest.raises(AuditStorageError):
         await AuditLogService(PhantomFake()).create(make_request())
+
+
+async def test_list_page_returns_the_requested_slice_from_the_repository() -> None:
+    """SPEC §8.1: la Capa 2 traslada la página ya validada por Capa 1 a Capa 3
+    sin recortarla ni reordenarla —quien corta y ordena es el repositorio—."""
+    newer = make_log(
+        id="000000000000000000000002",
+        performed_at=PERFORMED_AT,
+    )
+    older = make_log(
+        id="000000000000000000000001",
+        performed_at=PERFORMED_AT - timedelta(days=1),
+    )
+    service = AuditLogService(FakeAuditLogRepository(items=[older, newer]))
+
+    page = await service.list_page(skip=1, limit=1)
+
+    assert [log.id for log in page] == [older.id]
+
+
+async def test_list_by_checksum_returns_only_the_repository_matches() -> None:
+    """SPEC §8.1: la Capa 2 delega el filtro en el repositorio —filtrar y
+    ordenar es responsabilidad de la Capa 3, respaldada por el índice compuesto
+    de §6.3— y devuelve lo que éste entregue, sin reordenar."""
+    wanted = make_log(id="000000000000000000000001", checksum=CHECKSUM)
+    other = make_log(id="000000000000000000000002", checksum="otro-checksum")
+    service = AuditLogService(FakeAuditLogRepository(items=[wanted, other]))
+
+    matches = await service.list_by_checksum(CHECKSUM)
+
+    assert [log.id for log in matches] == [wanted.id]
+    assert all(log.checksum == CHECKSUM for log in matches)
