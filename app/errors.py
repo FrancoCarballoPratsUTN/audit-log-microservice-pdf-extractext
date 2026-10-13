@@ -1,4 +1,4 @@
-"""Errores de dominio: el vocabulario compartido por las tres capas.
+"""Errores de dominio.
 
 La Capa 3 los lanza, la Capa 2 decide y la Capa 1 los traduce a un cuerpo de
 problem details. Aquí no se importa FastAPI: un error que conoce su propio
