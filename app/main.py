@@ -15,6 +15,8 @@ sólo existe tras `connection.start()`.
 """
 
 import logging
+import os
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -35,7 +37,36 @@ from app.repositories.mongodb import (
 )
 from app.services.audit_log_service import AuditLogService
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
+
+def _setup_signal_handlers() -> None:
+    def _handle_sig(signum, _frame) -> None:
+        sig_name = "UNKNOWN"
+        signals_cls = getattr(signal, "Signals", None)
+        if signals_cls is not None:
+            try:
+                sig_name = signals_cls(signum).name
+            except Exception:
+                sig_name = "UNKNOWN"
+        logger.info("shutdown signal received: %s (%s)", sig_name, signum)
+
+    try:
+        signal.signal(signal.SIGTERM, _handle_sig)
+    except (ValueError, AttributeError):
+        pass
+    try:
+        signal.signal(signal.SIGINT, _handle_sig)
+    except (ValueError, AttributeError):
+        pass
 
 
 @asynccontextmanager
@@ -67,10 +98,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         except AuditStorageError as exc:
             logger.warning("startup without a ready MongoDB: %s", exc.detail)
-
+        logger.info("application startup complete")
         yield
     finally:
+        logger.info("application shutdown initiated: closing MongoDB client")
         await client.close()
+        logger.info("application shutdown complete")
 
 
 def create_app() -> FastAPI:
@@ -83,6 +116,9 @@ def create_app() -> FastAPI:
         ValidationError: Si `SERVICE_API_TOKEN` falta o está en blanco. El
             servicio no arranca en ese caso, a propósito (SPEC §3.6).
     """
+    _configure_logging()
+    _setup_signal_handlers()
+
     settings = get_settings()
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
