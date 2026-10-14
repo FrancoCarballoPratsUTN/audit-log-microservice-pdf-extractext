@@ -95,6 +95,74 @@ k6 run --env SERVICE_API_TOKEN=$env:SERVICE_API_TOKEN `
 
 Los resultados quedan en `tests/stress/out/` (ignorado por git).
 
+## Estructura del proyecto
+
+```
+audit-log-microservice-pdf-extractext/
+├── app/
+│   ├── api/
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── audit_logs.py      # Endpoints POST /audit/logs, GET /audit/logs, GET /audit/logs/checksum/{checksum}
+│   │   │   └── health.py          # Endpoints /health y /readyz
+│   │   ├── __init__.py
+│   │   ├── auth.py                # Autenticación Bearer
+│   │   ├── dependencies.py        # Dependencias FastAPI (inyección de repositorio/servicio)
+│   │   ├── exception_handlers.py  # Manejadores de errores (RFC 9457 Problem Details)
+│   │   ├── middleware.py          # Middleware (BodyLimit, ContentType, RequestValidationError)
+│   │   ├── problem.py             # Utilidades para errores RFC 9457
+│   │   └── schemas.py             # Esquemas Pydantic (validación y serialización)
+│   ├── domain/
+│   │   ├── __init__.py
+│   │   └── models.py              # Modelos de dominio (AuditLog)
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   ├── mongodb.py             # Conexión y gestión de MongoDB (lifespan)
+│   │   ├── mongo_audit_log_repository.py  # Implementación MongoDB del repositorio
+│   │   ├── protocol.py            # Protocolo (interfaz) del repositorio
+│   │   └── serialization.py       # Serialización/deserialización MongoDB
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── audit_log_service.py   # Lógica de negocio (idempotencia, paginación)
+│   ├── __init__.py
+│   ├── config.py                  # Configuración desde variables de entorno
+│   ├── errors.py                  # Excepciones de dominio
+│   └── main.py                    # Punto de entrada FastAPI (factory + lifespan)
+├── tasks/
+│   ├── docker-plan.md
+│   ├── docker-todo.md
+│   ├── plan.md
+│   ├── stress-plan.md
+│   ├── stress-todo.md
+│   └── todo.md
+├── tests/
+│   ├── fakes/                     # Fakes para tests unitarios
+│   ├── integration/               # Tests de integración (requieren MongoDB)
+│   │   ├── api/                   # Tests de endpoints
+│   │   └── repositories/          # Tests de repositorio MongoDB
+│   ├── stress/                    # Pruebas de carga/stress (Vegeta + k6)
+│   │   ├── out/                   # Resultados (ignorado por git)
+│   │   ├── scripts/               # Scripts PowerShell, Python y k6
+│   │   ├── targets/               # Ficheros de targets para Vegeta
+│   │   ├── README.md
+│   │   └── test_gen_targets.py
+│   ├── unit/                      # Tests unitarios
+│   │   ├── api/
+│   │   ├── domain/
+│   │   ├── repositories/
+│   │   └── services/
+│   ├── conftest.py
+│   └── __init__.py
+├── .env.example                  # Plantilla de variables de entorno (copiar a .env)
+├── Dockerfile                    # Imagen Docker multi-stage
+├── docker-compose.yml            # Stack local con Traefik compartido
+├── LICENSE
+├── pyproject.toml                # Dependencias y configuración (uv, ruff, pytest)
+├── README.md
+├── SPEC.md                       # Especificación completa
+└── uv.lock                       # Lockfile de dependencias
+```
+
 ## Contrato
 
 Todas las rutas salvo las sondas requieren `Authorization: Bearer <token>`.
