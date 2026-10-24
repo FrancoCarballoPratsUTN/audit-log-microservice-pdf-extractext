@@ -123,20 +123,14 @@ def _setup_signal_handlers() -> None:
         sig_name = "UNKNOWN"
         signals_cls = getattr(signal, "Signals", None)
         if signals_cls is not None:
-            try:
+            with suppress(Exception):
                 sig_name = signals_cls(signum).name
-            except Exception:
-                sig_name = "UNKNOWN"
         logger.info("shutdown signal received: %s (%s)", sig_name, signum)
 
-    try:
+    with suppress(ValueError, AttributeError):
         signal.signal(signal.SIGTERM, _handle_sig)
-    except (ValueError, AttributeError):
-        pass
-    try:
+    with suppress(ValueError, AttributeError):
         signal.signal(signal.SIGINT, _handle_sig)
-    except (ValueError, AttributeError):
-        pass
 
 
 @asynccontextmanager
