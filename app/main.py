@@ -19,7 +19,7 @@ import os
 import signal
 import socket
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI
@@ -99,18 +99,14 @@ def _install_deregister_handler(
             previous(signum, frame)
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
+        with suppress(ValueError, AttributeError):
             previous_handlers[sig] = signal.getsignal(sig)
             signal.signal(sig, handle_signal)
-        except (ValueError, AttributeError):
-            previous_handlers.pop(sig, None)
 
     def restore() -> None:
         for sig, previous in previous_handlers.items():
-            try:
+            with suppress(ValueError, AttributeError):
                 signal.signal(sig, previous)
-            except (ValueError, AttributeError):
-                pass
 
     return restore
 
