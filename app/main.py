@@ -65,10 +65,11 @@ def _consul_registration() -> dict[str, object] | None:
     service_name = os.getenv("CONSUL_SERVICE_NAME", "auditlog")
     service_id = os.getenv("CONSUL_SERVICE_ID") or f"{service_name}-{address}"
     tags_env = os.getenv("CONSUL_SERVICE_TAGS", "")
-    # Aceptar ';' o ',' como separador. Los tags permiten pasar labels/middlewares
-    # y patrones de routing al registro de Consul.
+    # Separador de tags: ';'. Las comas son parte del valor (p. ej. la lista de
+    # middlewares de Traefik: "security-headers@file,audit-cb@file"), por lo
+    # que NO deben usarse como separador.
     tags: list[str] = []
-    for part in tags_env.replace(",", ";").split(";"):
+    for part in tags_env.split(";"):
         tag = part.strip()
         if tag:
             tags.append(tag)
