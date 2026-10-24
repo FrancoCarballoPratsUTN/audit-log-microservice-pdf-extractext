@@ -64,6 +64,14 @@ def _consul_registration() -> dict[str, object] | None:
     port = int(os.getenv("CONSUL_SERVICE_PORT", os.getenv("PORT", "8000")))
     service_name = os.getenv("CONSUL_SERVICE_NAME", "auditlog")
     service_id = os.getenv("CONSUL_SERVICE_ID") or f"{service_name}-{address}"
+    tags_env = os.getenv("CONSUL_SERVICE_TAGS", "")
+    # Aceptar ';' o ',' como separador. Los tags permiten pasar labels/middlewares
+    # y patrones de routing al registro de Consul.
+    tags: list[str] = []
+    for part in tags_env.replace(",", ";").split(";"):
+        tag = part.strip()
+        if tag:
+            tags.append(tag)
     return {
         "address": os.getenv("CONSUL_HTTP_ADDR", ""),
         "token": os.getenv("CONSUL_HTTP_TOKEN", ""),
@@ -76,13 +84,7 @@ def _consul_registration() -> dict[str, object] | None:
             "CONSUL_SERVICE_CHECK_URL",
             f"http://{address}:{port}/readyz",
         ),
-        # Las comas son válidas dentro de un tag (por ejemplo, la lista de
-        # middlewares de un router), así que el separador externo es ';'.
-        "tags": [
-            tag.strip()
-            for tag in os.getenv("CONSUL_SERVICE_TAGS", "").split(";")
-            if tag.strip()
-        ],
+        "tags": tags,
     }
 
 
@@ -156,6 +158,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if registration is not None:
         register_service(**registration)
 
+    deregistered = False
+
+    def deregister() -> None:
+        nonlocal deregistered
+        if deregistered or registration is None:
+            return
+        try:
+            deregister_service(
+                registration["address"],
+                registration["token"],
+                registration["service_id"],
+                ca_file=registration["ca_file"],
+            )
+        except Exception:
+            logger.exception("Consul service deregistration failed.")
+        else:
+            deregistered = True
+
+    restore_signal_handlers = (
+        _install_deregister_handler(deregister)
+        if registration is not None
+        else lambda: None
+    )
+
     try:
         try:
             await ping(client)
@@ -168,16 +194,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("application startup complete")
         yield
     finally:
-        if registration is not None:
-            try:
-                deregister_service(
-                    registration["address"],
-                    registration["token"],
-                    registration["service_id"],
-                    ca_file=registration["ca_file"],
-                )
-            except Exception:
-                logger.exception("Consul service deregistration failed.")
+        restore_signal_handlers()
+        deregister()
         logger.info("application shutdown initiated: closing MongoDB client")
         await client.close()
         logger.info("application shutdown complete")
