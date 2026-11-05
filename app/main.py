@@ -16,11 +16,9 @@ sólo existe tras `connection.start()`.
 
 import logging
 import os
-import signal
 import socket
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager, suppress
-from typing import Any
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -89,51 +87,11 @@ def _consul_registration() -> dict[str, object] | None:
     }
 
 
-def _install_deregister_handler(
-    deregister: Callable[[], None],
-) -> Callable[[], None]:
-    """Deregistrar al recibir SIGTERM/SIGINT, antes de que uvicorn drene."""
-    previous_handlers: dict[int, Any] = {}
-
-    def handle_signal(signum: int, frame: Any) -> None:
-        deregister()
-        previous = previous_handlers.get(signum)
-        if callable(previous):
-            previous(signum, frame)
-
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        with suppress(ValueError, AttributeError):
-            previous_handlers[sig] = signal.getsignal(sig)
-            signal.signal(sig, handle_signal)
-
-    def restore() -> None:
-        for sig, previous in previous_handlers.items():
-            with suppress(ValueError, AttributeError):
-                signal.signal(sig, previous)
-
-    return restore
-
-
 def _configure_logging() -> None:
     logging.basicConfig(
         level=LOG_LEVEL,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
-
-
-def _setup_signal_handlers() -> None:
-    def _handle_sig(signum, _frame) -> None:
-        sig_name = "UNKNOWN"
-        signals_cls = getattr(signal, "Signals", None)
-        if signals_cls is not None:
-            with suppress(Exception):
-                sig_name = signals_cls(signum).name
-        logger.info("shutdown signal received: %s (%s)", sig_name, signum)
-
-    with suppress(ValueError, AttributeError):
-        signal.signal(signal.SIGTERM, _handle_sig)
-    with suppress(ValueError, AttributeError):
-        signal.signal(signal.SIGINT, _handle_sig)
 
 
 @asynccontextmanager
@@ -177,12 +135,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         else:
             deregistered = True
 
-    restore_signal_handlers = (
-        _install_deregister_handler(deregister)
-        if registration is not None
-        else lambda: None
-    )
-
     try:
         try:
             await ping(client)
@@ -195,7 +147,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("application startup complete")
         yield
     finally:
-        restore_signal_handlers()
         deregister()
         logger.info("application shutdown initiated: closing MongoDB client")
         await client.close()
@@ -213,7 +164,6 @@ def create_app() -> FastAPI:
             servicio no arranca en ese caso, a propósito (SPEC §3.6).
     """
     _configure_logging()
-    _setup_signal_handlers()
 
     settings = _settings_from_environment_or_consul()
 

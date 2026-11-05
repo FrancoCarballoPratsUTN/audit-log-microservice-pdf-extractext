@@ -17,6 +17,7 @@ para ejecutarse antes del enrutado, del `415` y del `413` (SPEC §4.3).
 """
 
 import importlib
+import signal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,7 +26,7 @@ from pydantic import ValidationError
 from app.api.auth import BearerAuthMiddleware
 from app.config import Settings
 from app.errors import ServiceError
-from app.main import create_app
+from app.main import create_app, lifespan
 
 TOKEN = "s3cr3t-shared-token"
 
@@ -121,3 +122,87 @@ def test_an_authenticated_request_reaches_the_routes(configured: None) -> None:
     response = client.get("/anything", headers={"Authorization": f"Bearer {TOKEN}"})
 
     assert response.status_code == 404
+
+
+def test_create_app_does_not_install_process_signal_handlers(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """uvicorn es el dueño de SIGTERM/SIGINT.
+
+    El servicio no debe reemplazar el handler que uvicorn instala para drenar
+    las conexiones: si lo hiciera, el apagado graceful dejaría de ocurrir o
+    ocurriría en un orden distinto al que el servidor garantiza.
+    """
+
+    def fail_if_installed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("create_app must not install signal handlers")
+
+    monkeypatch.setattr(signal, "signal", fail_if_installed)
+
+    create_app()
+
+
+async def test_shutdown_deregisters_consul_and_closes_the_client_once(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El cierre pertenece al `finally` del lifespan, no a una señal.
+
+    Con Consul habilitado, el apagado debe deregistrar el servicio y cerrar el
+    cliente exactamente una vez. El doble de `signal.signal` falla si el código
+    intenta apropiarse del handler del proceso.
+    """
+    app = create_app()
+    calls: list[str] = []
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        async def close(self) -> None:
+            self.close_calls += 1
+
+    client = RecordingClient()
+
+    async def noop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    def fail_if_installed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("the lifespan must not install signal handlers")
+
+    monkeypatch.setattr(
+        "app.main._consul_registration",
+        lambda: {
+            "address": "http://consul:8500",
+            "token": "consul-token",
+            "ca_file": None,
+            "service_id": "auditlog-1",
+            "service_name": "auditlog",
+            "service_address": "auditlog-1",
+            "service_port": 8000,
+            "check_url": "http://auditlog-1:8000/readyz",
+            "tags": [],
+        },
+    )
+    monkeypatch.setattr("app.main.open_client", lambda _settings: client)
+    monkeypatch.setattr("app.main.audit_logs_collection", lambda *_args: object())
+    monkeypatch.setattr("app.main.ping", noop)
+    monkeypatch.setattr("app.main.ensure_indexes", noop)
+    monkeypatch.setattr(
+        "app.main.register_service", lambda **_kwargs: calls.append("register")
+    )
+    monkeypatch.setattr(
+        "app.main.deregister_service",
+        lambda *_args, **_kwargs: calls.append("deregister"),
+    )
+    original_signal = signal.signal
+    monkeypatch.setattr(signal, "signal", fail_if_installed)
+    try:
+        async with lifespan(app):
+            pass
+    finally:
+        # pytest-asyncio restaura SIGINT al terminar el test; dejar el doble
+        # instalado durante ese teardown haría fallar el propio runner.
+        monkeypatch.setattr(signal, "signal", original_signal)
+
+    assert calls == ["register", "deregister"]
+    assert client.close_calls == 1

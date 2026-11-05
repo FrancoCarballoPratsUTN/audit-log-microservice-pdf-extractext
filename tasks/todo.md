@@ -8,7 +8,7 @@
 > 100 % de cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento
 > del transporte, la matriz de errores y el OpenAPI implementados.
 >
-> **Remediación post code review:** 0/13 tareas (T17–T29); ver Fases 6–8.
+> **Remediación post code review:** 1/13 tareas (T17–T29); ver Fases 6–8.
 
 ---
 
@@ -226,13 +226,13 @@
 > [#40–#55](https://github.com/FrancoCarballoPratsUTN/audit-log-microservice-pdf-extractext/issues/40)
 > (épicos F6–F8). Este bloque surge de la revisión de código H-01…H-17.
 
-- [ ] **T17: Apagado graceful y gate de lint** · H-01, H-04, H-16
-  - [ ] Ningún código de `app/` instala un handler que sustituya al de uvicorn
-  - [ ] `SIGTERM` en contenedor: uvicorn drena, ejecuta el `finally` del lifespan y termina con código 0 dentro del grace period
-  - [ ] El deregistro de Consul sigue ocurriendo en el cierre; hay test con doble
-  - [ ] `ruff check .` y `ruff format --check .` pasan
-  - [ ] No queda ningún test que mute handlers globales del proceso
-  - [ ] `tests/unit/test_main_signals.py` eliminado y `app/main.py` formateado
+- [x] **T17: Apagado graceful y gate de lint** · H-01, H-04, H-16
+  - [x] Ningún código de `app/` instala un handler que sustituya al de uvicorn
+  - [x] `SIGTERM` en contenedor: uvicorn drena, ejecuta el `finally` del lifespan y termina con código 0 dentro del grace period
+  - [x] El deregistro de Consul sigue ocurriendo en el cierre; hay test con doble
+  - [x] `ruff check .` y `ruff format --check .` pasan
+  - [x] No queda ningún test que mute handlers globales del proceso
+  - [x] `tests/unit/test_main_signals.py` eliminado y `app/main.py` formateado
 
 - [ ] **T18: Readiness real: ping + índices** · H-02, H-05
   - [ ] `/readyz` responde `503` si falla el ping o si los índices no están listos
