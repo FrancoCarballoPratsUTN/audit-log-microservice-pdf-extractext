@@ -48,20 +48,20 @@ def test_upper_layers_do_not_import_pymongo(layer: str) -> None:
     assert not offenders, f"app/{layer} no debe importar pymongo: {offenders}"
 
 
-def test_audit_logs_router_does_not_import_pymongo_or_repositories() -> None:
-    """AC de T10: la Capa 1 no puede conocer el driver ni Capa 3. El router
-    pide el servicio por dependency injection (`app.state`), no lo construye."""
-    source = (APP_DIR / "api" / "routers" / "audit_logs.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            imported.add(node.module)
+def test_api_layer_does_not_import_pymongo_or_repositories() -> None:
+    """La Capa 1 no puede conocer el driver ni la Capa 3.
 
-    assert not any(name == "pymongo" or name == "pymongo.errors" for name in imported)
-    assert not any(name.startswith("app.repositories") for name in imported)
+    Se comprueba sobre toda la capa y no sobre un router concreto: un módulo
+    nuevo, como una sonda de readiness, no debe poder saltarse la regla.
+    """
+    imported = imported_modules("api")
+
+    assert not {name for name in imported if name.split(".")[0] == "pymongo"}, (
+        f"app/api no debe importar pymongo: {imported}"
+    )
+    assert not {name for name in imported if name.startswith("app.repositories")}, (
+        f"app/api no debe importar app.repositories: {imported}"
+    )
 
 
 def test_repositories_do_not_import_inner_layers() -> None:

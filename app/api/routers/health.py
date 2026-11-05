@@ -12,8 +12,6 @@ sería dos verdades que se desincronizarían.
 
 from fastapi import APIRouter, Request
 
-from app.repositories.mongodb import ping
-
 router = APIRouter(tags=["health"])
 
 
@@ -29,14 +27,15 @@ async def health() -> dict[str, str]:
 
 @router.get("/readyz", summary="Readiness: el servicio puede atender tráfico")
 async def readyz(request: Request) -> dict[str, str]:
-    """Hacer `ping` y dejar que la Capa 1 traduzca el fallo a `503`.
+    """Consultar la sonda que verifica Mongo y los índices.
 
-    El `ping` es de cada llamada y no un flag del arranque, para que una caída
-    transitoria de Mongo no deje el servicio en `503` para siempre.
+    La sonda es de cada llamada y no un flag del arranque, para que una caída
+    transitoria de Mongo no deje el servicio en `503` para siempre. El router no
+    conoce la Capa 3: pide la sonda por `app.state`, igual que el servicio.
 
     Raises:
-        AuditStorageError: Si Mongo no responde. El handler lo convierte en
-            `503 AUDIT_STORAGE_ERROR`.
+        AuditStorageError: Si Mongo no responde o los índices no están listos.
+            El handler lo convierte en `503 AUDIT_STORAGE_ERROR`.
     """
-    await ping(request.app.state.mongo_client)
+    await request.app.state.readiness_probe()
     return {"status": "ok", "mongo": "ok"}

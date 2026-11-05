@@ -31,12 +31,8 @@ from app.consul import load_prefix
 from app.consul_agent import deregister_service, register_service
 from app.errors import AuditStorageError
 from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
-from app.repositories.mongodb import (
-    audit_logs_collection,
-    ensure_indexes,
-    open_client,
-    ping,
-)
+from app.repositories.mongodb import audit_logs_collection, open_client
+from app.repositories.readiness import ReadinessProbe
 from app.services.audit_log_service import AuditLogService
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -107,12 +103,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     client = open_client(settings)
     app.state.mongo_client = client
 
+    # La colección se resuelve una sola vez: el repositorio y la sonda de
+    # readiness tienen que compartir exactamente la misma instancia.
+    collection = audit_logs_collection(client, settings)
+
     # El servicio y el repositorio, construidos una vez en el arranque y
     # guardados en `app.state`: el router los pide por dependency injection y
     # ningún test tiene que saber cómo se montan (SPEC §12).
-    app.state.audit_log_service = AuditLogService(
-        MongoAuditLogRepository(audit_logs_collection(client, settings))
+    app.state.audit_log_service = AuditLogService(MongoAuditLogRepository(collection))
+    readiness_probe = ReadinessProbe(
+        client,
+        collection,
+        retention_days=settings.retention_days,
     )
+    app.state.readiness_probe = readiness_probe
     registration = _consul_registration()
     if registration is not None:
         register_service(**registration)
@@ -137,11 +141,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     try:
         try:
-            await ping(client)
-            await ensure_indexes(
-                audit_logs_collection(client, settings),
-                retention_days=settings.retention_days,
-            )
+            await readiness_probe()
         except AuditStorageError as exc:
             logger.warning("startup without a ready MongoDB: %s", exc.detail)
         logger.info("application startup complete")

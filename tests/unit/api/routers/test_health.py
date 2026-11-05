@@ -20,7 +20,13 @@ from app.api.exception_handlers import register_exception_handlers
 from app.api.routers.health import router
 from app.config import Settings
 from app.main import create_app, lifespan
-from tests.fakes.fake_mongo import FailingClient, WorkingClient
+from app.repositories.readiness import ReadinessProbe
+from tests.fakes.fake_mongo import (
+    FailingClient,
+    FailingCollection,
+    WorkingClient,
+    WorkingCollection,
+)
 
 TOKEN = "s3cr3t-shared-token"
 
@@ -44,12 +50,15 @@ def mongo_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MONGO_TIMEOUT_MS", "150")
 
 
-def build_app(client: object) -> FastAPI:
-    """App mínima con las sondas y el cliente que se le pase."""
+def build_app(client: object, collection: object | None = None) -> FastAPI:
+    """App mínima con las sondas y la sonda de readiness que se le pase."""
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(router)
     app.state.mongo_client = client
+    app.state.readiness_probe = ReadinessProbe(
+        client, collection or WorkingCollection(), retention_days=0
+    )
 
     @app.get("/audit/logs")
     async def list_logs() -> dict[str, str]:
@@ -85,6 +94,31 @@ def test_readyz_reports_503_when_mongo_does_not_answer() -> None:
     client = TestClient(build_app(FailingClient()))
 
     assert client.get("/readyz").status_code == 503
+
+
+def test_readyz_reports_503_when_indexes_cannot_be_created() -> None:
+    """Mongo puede responder y el servicio seguir sin poder atender tráfico.
+
+    El fallo de índices es distinto del fallo de conexión, pero ambos son `503`
+    y ambos deben llegar como problem details.
+    """
+    client = TestClient(build_app(WorkingClient(), FailingCollection()))
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "AUDIT_STORAGE_ERROR"
+    assert response.json()["detail"] == "MongoDB indexes could not be created."
+
+
+def test_readyz_creates_indexes_once_across_calls() -> None:
+    """La sonda se repite cada pocos segundos; los índices se crean una vez."""
+    collection = WorkingCollection()
+    client = TestClient(build_app(WorkingClient(), collection))
+
+    assert client.get("/readyz").status_code == 200
+    assert client.get("/readyz").status_code == 200
+    assert collection.create_calls == 1
 
 
 def test_the_503_is_a_parseable_problem_and_not_a_bare_status() -> None:
@@ -135,12 +169,16 @@ def test_the_probes_answer_with_credentials_too(mongo_is_down: None) -> None:
 def test_readyz_recovers_when_mongo_comes_back(mongo_is_down: None) -> None:
     """`/readyz` se consulta en cada sondeo, no una vez al arrancar: una caída
     transitoria de Mongo no puede dejar el servicio en `503` para siempre. Por eso
-    vuelve a hacer `ping` en cada llamada en vez de leer un flag del arranque."""
+    vuelve a hacer `ping` y a intentar los índices en cada llamada."""
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as client:
         assert client.get("/readyz").status_code == 503
 
-        app.state.mongo_client = WorkingClient()
+        recovered = WorkingClient()
+        app.state.mongo_client = recovered
+        app.state.readiness_probe = ReadinessProbe(
+            recovered, WorkingCollection(), retention_days=0
+        )
 
         assert client.get("/readyz").status_code == 200
 

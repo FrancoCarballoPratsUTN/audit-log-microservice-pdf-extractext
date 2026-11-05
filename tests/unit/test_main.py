@@ -27,6 +27,7 @@ from app.api.auth import BearerAuthMiddleware
 from app.config import Settings
 from app.errors import ServiceError
 from app.main import create_app, lifespan
+from tests.fakes.fake_mongo import WorkingClient, WorkingCollection
 
 TOKEN = "s3cr3t-shared-token"
 
@@ -185,8 +186,7 @@ async def test_shutdown_deregisters_consul_and_closes_the_client_once(
     )
     monkeypatch.setattr("app.main.open_client", lambda _settings: client)
     monkeypatch.setattr("app.main.audit_logs_collection", lambda *_args: object())
-    monkeypatch.setattr("app.main.ping", noop)
-    monkeypatch.setattr("app.main.ensure_indexes", noop)
+    monkeypatch.setattr("app.main.ReadinessProbe", lambda *_args, **_kwargs: noop)
     monkeypatch.setattr(
         "app.main.register_service", lambda **_kwargs: calls.append("register")
     )
@@ -206,3 +206,28 @@ async def test_shutdown_deregisters_consul_and_closes_the_client_once(
 
     assert calls == ["register", "deregister"]
     assert client.close_calls == 1
+
+
+async def test_lifespan_builds_the_collection_once(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La colección se resuelve una vez y se comparte.
+
+    Resolverla de nuevo para crear los índices apunta dos veces a la misma
+    colección por casualidad; si la configuración cambiara entre ambas llamadas,
+    los índices y el repositorio podrían acabar en sitios distintos.
+    """
+    collection = WorkingCollection()
+    built: list[object] = []
+
+    def build_collection(*_args: object) -> object:
+        built.append(collection)
+        return collection
+
+    monkeypatch.setattr("app.main.open_client", lambda _settings: WorkingClient())
+    monkeypatch.setattr("app.main.audit_logs_collection", build_collection)
+
+    async with lifespan(create_app()):
+        pass
+
+    assert built == [collection]

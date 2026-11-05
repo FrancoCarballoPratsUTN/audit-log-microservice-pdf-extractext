@@ -8,7 +8,7 @@
 > 100 % de cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento
 > del transporte, la matriz de errores y el OpenAPI implementados.
 >
-> **Remediación post code review:** 1/13 tareas (T17–T29); ver Fases 6–8.
+> **Remediación post code review:** 2/13 tareas (T17–T29); ver Fases 6–8.
 
 ---
 
@@ -234,13 +234,13 @@
   - [x] No queda ningún test que mute handlers globales del proceso
   - [x] `tests/unit/test_main_signals.py` eliminado y `app/main.py` formateado
 
-- [ ] **T18: Readiness real: ping + índices** · H-02, H-05
-  - [ ] `/readyz` responde `503` si falla el ping o si los índices no están listos
-  - [ ] Cuando Mongo vuelve, `/readyz` crea los índices y pasa a `200`; llamadas posteriores no los recrean
-  - [ ] El arranque con Mongo caído mantiene `/health` en `200` y no rompe el proceso
-  - [ ] `app/api` no importa `app.repositories`; el test lo verifica sobre toda la Capa 1
-  - [ ] `audit_logs_collection()` se invoca una sola vez en el lifespan
-  - [ ] `readiness_probe` inyectado en `app.state` con `indexes_ready`, `ensure_indexes` idempotente y lock
+- [x] **T18: Readiness real: ping + índices** · H-02, H-05
+  - [x] `/readyz` responde `503` si falla el ping o si los índices no están listos
+  - [x] Cuando Mongo vuelve, `/readyz` crea los índices y pasa a `200`; llamadas posteriores no los recrean
+  - [x] El arranque con Mongo caído mantiene `/health` en `200` y no rompe el proceso
+  - [x] `app/api` no importa `app.repositories`; el test lo verifica sobre toda la Capa 1
+  - [x] `audit_logs_collection()` se invoca una sola vez en el lifespan
+  - [x] `readiness_probe` inyectado en `app.state` con `indexes_ready`, `ensure_indexes` idempotente y lock
 
 - [ ] **T19: `details`: validación en frontera y errores BSON** · H-03, H-06
   - [ ] `NaN` e `Infinity` ⇒ `400`, sin insertar documento

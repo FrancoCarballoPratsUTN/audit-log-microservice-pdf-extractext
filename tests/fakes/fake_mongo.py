@@ -13,7 +13,7 @@ El `client.close()` es un no-op: no hay conexión que cerrar, y sin él el cierr
 del lifespan fallaría contra un doble que no imita esa parte.
 """
 
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 
 
 class WorkingAdmin:
@@ -66,3 +66,32 @@ class FailingAdmin:
     async def command(self, name: str) -> dict[str, float]:
         self.client.commands.append(name)
         raise self.client.error
+
+
+class WorkingCollection:
+    """Colección que acepta `create_indexes` y cuenta las llamadas.
+
+    La readiness sólo debe crear índices una vez aunque se sondee muchas veces;
+    contar las llamadas es la forma de afirmarlo sin abrir Mongo.
+    """
+
+    def __init__(self) -> None:
+        self.create_calls = 0
+        self.models: list[object] = []
+
+    async def create_indexes(self, models: list[object]) -> list[str]:
+        self.create_calls += 1
+        self.models = list(models)
+        return [model.document["name"] for model in self.models]
+
+
+class FailingCollection:
+    """Colección que rechaza la creación de índices con el error que se le pase."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error or OperationFailure("indexes could not be created")
+        self.create_calls = 0
+
+    async def create_indexes(self, models: list[object]) -> list[str]:
+        self.create_calls += 1
+        raise self.error
