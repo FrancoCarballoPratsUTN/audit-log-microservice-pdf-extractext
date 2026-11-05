@@ -4,9 +4,11 @@
 > dependencias) está en [`plan.md`](./plan.md); el diseño en
 > [`../SPEC.md`](../SPEC.md).
 >
-> **Estado:** 16/16 tareas. T7–T16 cerradas y verificadas (380 tests, 100 % de
-> cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento del
-> transporte, la matriz de errores y el OpenAPI implementados.
+> **Estado:** 16/16 tareas originales. T7–T16 cerradas y verificadas (380 tests,
+> 100 % de cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento
+> del transporte, la matriz de errores y el OpenAPI implementados.
+>
+> **Remediación post code review:** 0/13 tareas (T17–T29); ver Fases 6–8.
 
 ---
 
@@ -215,6 +217,129 @@
 - [x] Checklist SPEC §9 en verde
 - [x] Criterios de éxito del SPEC cumplidos
 - [ ] Listo para revisión final del humano
+
+---
+
+## Phase 6: Remediación — Bloqueantes
+
+> Detalle completo, dependencias, archivos y verificación: issues
+> [#40–#55](https://github.com/FrancoCarballoPratsUTN/audit-log-microservice-pdf-extractext/issues/40)
+> (épicos F6–F8). Este bloque surge de la revisión de código H-01…H-17.
+
+- [ ] **T17: Apagado graceful y gate de lint** · H-01, H-04, H-16
+  - [ ] Ningún código de `app/` instala un handler que sustituya al de uvicorn
+  - [ ] `SIGTERM` en contenedor: uvicorn drena, ejecuta el `finally` del lifespan y termina con código 0 dentro del grace period
+  - [ ] El deregistro de Consul sigue ocurriendo en el cierre; hay test con doble
+  - [ ] `ruff check .` y `ruff format --check .` pasan
+  - [ ] No queda ningún test que mute handlers globales del proceso
+  - [ ] `tests/unit/test_main_signals.py` eliminado y `app/main.py` formateado
+
+- [ ] **T18: Readiness real: ping + índices** · H-02, H-05
+  - [ ] `/readyz` responde `503` si falla el ping o si los índices no están listos
+  - [ ] Cuando Mongo vuelve, `/readyz` crea los índices y pasa a `200`; llamadas posteriores no los recrean
+  - [ ] El arranque con Mongo caído mantiene `/health` en `200` y no rompe el proceso
+  - [ ] `app/api` no importa `app.repositories`; el test lo verifica sobre toda la Capa 1
+  - [ ] `audit_logs_collection()` se invoca una sola vez en el lifespan
+  - [ ] `readiness_probe` inyectado en `app.state` con `indexes_ready`, `ensure_indexes` idempotente y lock
+
+- [ ] **T19: `details`: validación en frontera y errores BSON** · H-03, H-06
+  - [ ] `NaN` e `Infinity` ⇒ `400`, sin insertar documento
+  - [ ] Entero mayor de 64 bits ⇒ `400`, no `500`
+  - [ ] Clave con `\u0000` o estructura BSON inválida ⇒ `400`
+  - [ ] Anidamiento excesivo ⇒ `400`, no `500`
+  - [ ] El límite se mide en bytes UTF-8: un payload no ASCII por debajo del límite se acepta; uno que lo supera da `413`
+  - [ ] Un `POST` inválido no deja un documento que luego haga fallar el `GET`
+
+### Checkpoint A — Bloqueantes cerrados
+- [ ] `U` verde.
+- [ ] `L` verde.
+- [ ] Smoke manual: `SIGTERM` limpio, `/readyz` recupera con Mongo, `details` inválidos devuelven `400`.
+- [ ] Revisión humana antes de pasar a la Fase 7.
+
+---
+
+## Phase 7: Remediación — Corrección, seguridad y operación
+
+- [ ] **T20: Identidad normalizada a milisegundos** · H-11, H-17
+  - [ ] `performed_at` y `received_at` quedan normalizados a milisegundos en el dominio
+  - [ ] El test de serialización ya no afirma que Mongo guarda microsegundos
+  - [ ] Test explícito de truncamiento `.123456 → .123000`
+  - [ ] La documentación del contrato dice que la identidad/deduplicación es por ms
+
+- [ ] **T21: Validaciones cruzadas de `Settings`** · H-07
+  - [ ] Un `DEFAULT_LIMIT` mayor que `MAX_LIMIT` impide arrancar con un error explícito
+  - [ ] `MAX_DETAILS_BYTES > MAX_BODY_BYTES` impide arrancar
+  - [ ] Los valores válidos siguen funcionando igual
+  - [ ] `model_validator(mode="after")` con mensajes claros y tests de combinaciones inválidas
+
+- [ ] **T22: `LOG_LEVEL` dentro de `Settings`** · H-08
+  - [ ] `LOG_LEVEL` se lee desde `Settings`, no desde `os.getenv` en el import
+  - [ ] Un valor inválido falla al arrancar con un mensaje claro
+  - [ ] El nivel configurado se aplica aunque se cree más de una app en tests
+  - [ ] `.env.example` y la documentación listan la variable
+
+- [ ] **T23: Quitar handler global de `PydanticValidationError`** · H-09
+  - [ ] Un JSON de entrada inválido sigue devolviendo `400 VALIDATION_ERROR`
+  - [ ] Un `PydanticValidationError` interno devuelve `500 INTERNAL_ERROR` y deja la causa en el log
+  - [ ] No queda registro del tipo base en `register_exception_handlers`
+
+- [ ] **T24: Autenticación robusta con credenciales no ASCII** · H-12
+  - [ ] Una credencial con acentos devuelve `401`, no `500`
+  - [ ] Un token configurado con caracteres no ASCII funciona correctamente
+  - [ ] No se registra el valor del token ni de la credencial
+  - [ ] La documentación de despliegue incluye el rate limit de `401` como mitigación de flood
+
+- [ ] **T25: Sanear `X-Request-ID`** · H-13
+  - [ ] Un `X-Request-ID` válido se conserva y se devuelve igual
+  - [ ] Un ID inválido, vacío o demasiado largo se reemplaza por un UUID
+  - [ ] Los logs no pueden ser inyectados con saltos de línea desde esa cabecera
+
+- [ ] **T26: Cerrar bypass del límite de body** · H-10
+  - [ ] Un `POST` sin `Content-Length` no llega a Pydantic y devuelve `413`
+  - [ ] Un `POST` con `Transfer-Encoding: chunked` no se lee sin límite
+  - [ ] Un body dentro del límite sigue funcionando
+  - [ ] La configuración de Traefik incluye `buffering.maxRequestBodyBytes`
+  - [ ] La documentación explica el comportamiento para clientes chunked/HTTP/2 sin longitud
+
+- [ ] **T27: Access log único y documentación usable** · H-14
+  - [ ] Cada petición produce una sola línea de access log
+  - [ ] `/docs` y `/openapi.json` cargan sin token; `/audit/logs` sigue devolviendo `401`
+  - [ ] El `CMD` del Dockerfile incluye `--no-access-log`
+  - [ ] La documentación explica que la UI y el esquema son públicos por diseño, pero los datos no
+
+### Checkpoint B1 — Configuración y dominio
+- [ ] `U` verde.
+- [ ] `L` verde.
+- [ ] Tests de configuración inválida y normalización ms pasan.
+
+### Checkpoint B2 — Seguridad y operación
+- [ ] `U` verde.
+- [ ] `L` verde.
+- [ ] Smoke: credencial no ASCII, request ID inválido, body sin longitud, `/docs` y access log único.
+- [ ] `docker build` correcto.
+
+---
+
+## Phase 8: Remediación — Limpieza
+
+- [ ] **T28: Unificar renderizado y normalización de `details`** · H-15a
+  - [ ] Escritura y lectura usan el mismo formateador de 7 campos
+  - [ ] El formato RFC 3339 con `Z` y ms no cambia
+  - [ ] `details` se normaliza en un solo sitio y las ramas `details is None` inalcanzables desaparecen
+  - [ ] El tipo declarado refleja lo que realmente se acepta (`Any`/`JsonValue`, no `dict`)
+
+- [ ] **T29: Eliminar código muerto y duplicados** · H-15b
+  - [ ] No queda `render`, `count`, `seed` ni `count_error` sin uso
+  - [ ] No hay dos constantes para el mismo mensaje de storage
+  - [ ] El docstring del fake describe el comportamiento real del servicio
+  - [ ] La suite sigue verde y sin pérdida de cobertura
+
+### Checkpoint C — Cierre
+- [ ] `U` verde.
+- [ ] `L` verde.
+- [ ] Cobertura igual o superior al 100 % actual.
+- [ ] `I` ejecutado con Mongo real.
+- [ ] Revisión final contra la matriz H-01…H-17.
 
 ---
 
