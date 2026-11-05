@@ -79,3 +79,8 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
         _env_file=None,
         **{key.lower(): value for key, value in environ.items()},
     )
+
+
+def get_settings_from_values(values: Mapping[str, str]) -> Settings:
+    """Build settings from a validated external source such as Consul KV."""
+    return get_settings(values)
