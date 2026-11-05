@@ -144,6 +144,31 @@ async def test_details_over_the_limit_is_413_and_nothing_is_written(
     assert await clean_collection.count_documents({}) == 0
 
 
+async def test_invalid_bson_details_are_rejected_and_get_still_works(
+    deployed: None, clean_collection: object
+) -> None:
+    """Los valores inválidos se frenan antes de Mongo y no contaminan lecturas."""
+    raw_event = (
+        '{"action":"pdf.extract","entity_type":"document",'
+        '"checksum":"invalid-bson","details":{"bad\\u0000key":"value"},'
+        '"performed_at":"2026-10-05T12:34:56.789Z"}'
+    )
+
+    with TestClient(create_app()) as client:
+        rejected = client.post(
+            "/audit/logs",
+            content=raw_event,
+            headers={**AUTH, "Content-Type": "application/json"},
+        )
+        listed = client.get("/audit/logs", headers=AUTH)
+
+    assert rejected.status_code == 400
+    assert rejected.json()["code"] == "VALIDATION_ERROR"
+    assert listed.status_code == 200
+    assert listed.json() == []
+    assert await clean_collection.count_documents({}) == 0
+
+
 async def test_an_arbitrary_checksum_is_accepted_and_the_location_is_escaped(
     deployed: None, clean_collection: object
 ) -> None:

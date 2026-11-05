@@ -11,6 +11,7 @@ La persistencia real y "el documento existe en Mongo" son de
 `tests/integration/api/test_create_audit_log.py`.
 """
 
+import json
 from datetime import UTC, datetime
 from urllib.parse import quote
 
@@ -34,6 +35,12 @@ VALID_EVENT = {
     "details": {"page_count": 12},
     "performed_at": "2026-10-05T12:34:56.789Z",
 }
+
+RAW_EVENT_PREFIX = (
+    '{"action":"pdf.extract","entity_type":"document",'
+    '"checksum":"9f86d081884c7d659a2feaa0c55ad015",'
+    '"performed_at":"2026-10-05T12:34:56.789Z","details":'
+)
 
 
 def _app(
@@ -156,6 +163,99 @@ def test_details_over_the_limit_returns_413_without_calling_the_service() -> Non
 
     assert response.status_code == 413
     assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
+    assert service.created == []
+
+
+@pytest.mark.parametrize(
+    "details",
+    [
+        float("nan"),
+        float("inf"),
+        2**63,
+        {"bad\x00key": "value"},
+    ],
+    ids=["nan", "infinity", "integer-out-of-bson-range", "nul-key"],
+)
+def test_details_that_cannot_be_stored_as_bson_return_400_before_service(
+    details: object,
+) -> None:
+    service = SpyingService(CreateResult(_log(), replay=False))
+
+    client = TestClient(_app(service))
+    body = RAW_EVENT_PREFIX + json.dumps(details, allow_nan=True) + "}"
+    response = client.post(
+        "/audit/logs",
+        content=body,
+        headers={"Authorization": "Bearer test", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert service.created == []
+
+
+def test_excessively_nested_details_return_400_before_service() -> None:
+    service = SpyingService(CreateResult(_log(), replay=False))
+    details: object = "leaf"
+    for _ in range(150):
+        details = [details]
+
+    client = TestClient(_app(service))
+    body = RAW_EVENT_PREFIX + json.dumps(details) + "}"
+    response = client.post(
+        "/audit/logs",
+        content=body,
+        headers={"Authorization": "Bearer test", "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert service.created == []
+
+
+def test_rejected_details_do_not_poison_a_later_list_response() -> None:
+    service = SpyingService(CreateResult(_log(), replay=False))
+    client = TestClient(_app(service))
+    invalid_body = RAW_EVENT_PREFIX + '{"bad\\u0000key":"value"}}'
+    headers = {
+        "Authorization": "Bearer test",
+        "Content-Type": "application/json",
+    }
+
+    rejected = client.post("/audit/logs", content=invalid_body, headers=headers)
+    listed = client.get("/audit/logs", headers=headers)
+
+    assert rejected.status_code == 400
+    assert listed.status_code == 200
+    assert listed.json() == []
+    assert service.created == []
+
+
+def test_details_size_limit_counts_utf8_bytes() -> None:
+    details = {"text": "á" * 20}
+    encoded = json.dumps(details, ensure_ascii=False, separators=(",", ":"))
+    service = SpyingService(CreateResult(_log(), replay=False))
+
+    response = _post(
+        service, {**VALID_EVENT, "details": details}, limit=len(encoded.encode())
+    )
+
+    assert response.status_code == 201
+    assert service.created[0].details == details
+
+
+def test_details_over_utf8_byte_limit_return_413_before_service() -> None:
+    details = {"text": "á" * 20}
+    encoded = json.dumps(details, ensure_ascii=False, separators=(",", ":"))
+    service = SpyingService(CreateResult(_log(), replay=False))
+
+    response = _post(
+        service,
+        {**VALID_EVENT, "details": details},
+        limit=len(encoded.encode()) - 1,
+    )
+
+    assert response.status_code == 413
     assert service.created == []
 
 

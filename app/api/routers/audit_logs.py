@@ -26,6 +26,8 @@ import json
 from typing import Any
 from urllib.parse import quote
 
+from bson import BSON
+from bson.errors import BSONError
 from fastapi import APIRouter, Depends, Request, Security, status
 from fastapi.responses import JSONResponse
 
@@ -61,6 +63,7 @@ router = APIRouter(
 )
 
 LOCATION_PREFIX = "/audit/logs/checksum/"
+BSON_MAX_NESTING = 100
 
 
 @router.post(
@@ -101,7 +104,16 @@ async def create_audit_log(
     details: Any = {} if event.details is None else event.details
     settings = request.app.state.settings
 
-    if len(json.dumps(details)) > settings.max_details_bytes:
+    try:
+        validate_bson_nesting(details)
+        encoded_details = json_details(details)
+        BSON.encode({"details": details})
+    except BSONError, OverflowError, RecursionError, TypeError, ValueError:
+        raise ValidationError(
+            "The 'details' field is not valid JSON/BSON data."
+        ) from None
+
+    if len(encoded_details) > settings.max_details_bytes:
         raise PayloadTooLargeError()
 
     result = await service.create(
@@ -124,6 +136,40 @@ async def create_audit_log(
         content=body.model_dump(by_alias=True),
         headers=headers,
     )
+
+
+def json_details(details: Any) -> bytes:
+    """Serializar `details` como JSON estricto y contar sus bytes UTF-8.
+
+    El parser estándar de Python acepta NaN e Infinity aunque no sean JSON; la
+    serialización estricta los rechaza antes de que puedan llegar a Mongo. La
+    validación BSON paralela en el endpoint detecta límites de enteros, claves
+    nulas y profundidad que el formato JSON por sí solo permite.
+    """
+    return json.dumps(
+        details,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def validate_bson_nesting(details: Any) -> None:
+    """Rechazar estructuras más profundas que el máximo de anidamiento BSON.
+
+    El driver puede codificar estructuras que MongoDB rechaza al insertarlas.
+    La pila explícita también evita que la propia validación recursiva desborde
+    Python antes de poder responder con un error de petición.
+    """
+    pending = [(details, 0)]
+    while pending:
+        value, depth = pending.pop()
+        if isinstance(value, dict | list):
+            depth += 1
+            if depth > BSON_MAX_NESTING:
+                raise ValueError("details exceeds BSON nesting depth")
+            children = value.values() if isinstance(value, dict) else value
+            pending.extend((child, depth) for child in children)
 
 
 @router.get(

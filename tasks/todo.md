@@ -8,7 +8,7 @@
 > 100 % de cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento
 > del transporte, la matriz de errores y el OpenAPI implementados.
 >
-> **Remediación post code review:** 2/13 tareas (T17–T29); ver Fases 6–8.
+> **Remediación post code review:** 3/13 tareas (T17–T29); ver Fases 6–8.
 
 ---
 
@@ -242,13 +242,13 @@
   - [x] `audit_logs_collection()` se invoca una sola vez en el lifespan
   - [x] `readiness_probe` inyectado en `app.state` con `indexes_ready`, `ensure_indexes` idempotente y lock
 
-- [ ] **T19: `details`: validación en frontera y errores BSON** · H-03, H-06
-  - [ ] `NaN` e `Infinity` ⇒ `400`, sin insertar documento
-  - [ ] Entero mayor de 64 bits ⇒ `400`, no `500`
-  - [ ] Clave con `\u0000` o estructura BSON inválida ⇒ `400`
-  - [ ] Anidamiento excesivo ⇒ `400`, no `500`
-  - [ ] El límite se mide en bytes UTF-8: un payload no ASCII por debajo del límite se acepta; uno que lo supera da `413`
-  - [ ] Un `POST` inválido no deja un documento que luego haga fallar el `GET`
+- [x] **T19: `details`: validación en frontera y errores BSON** · H-03, H-06
+  - [x] `NaN` e `Infinity` ⇒ `400`, sin insertar documento
+  - [x] Entero mayor de 64 bits ⇒ `400`, no `500`
+  - [x] Clave con `\u0000` o estructura BSON inválida ⇒ `400`
+  - [x] Anidamiento excesivo ⇒ `400`, no `500`
+  - [x] El límite se mide en bytes UTF-8: un payload no ASCII por debajo del límite se acepta; uno que lo supera da `413`
+  - [x] Un `POST` inválido no deja un documento que luego haga fallar el `GET` (test de integración agregado; requiere Mongo para ejecutarse)
 
 ### Checkpoint A — Bloqueantes cerrados
 - [ ] `U` verde.
