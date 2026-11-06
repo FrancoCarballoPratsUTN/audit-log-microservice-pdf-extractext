@@ -260,11 +260,11 @@
 
 ## Phase 7: Remediación — Corrección, seguridad y operación
 
-- [ ] **T20: Identidad normalizada a milisegundos** · H-11, H-17
-  - [ ] `performed_at` y `received_at` quedan normalizados a milisegundos en el dominio
-  - [ ] El test de serialización ya no afirma que Mongo guarda microsegundos
-  - [ ] Test explícito de truncamiento `.123456 → .123000`
-  - [ ] La documentación del contrato dice que la identidad/deduplicación es por ms
+- [x] **T20: Identidad normalizada a milisegundos** · H-11, H-17
+  - [x] `performed_at` y `received_at` quedan normalizados a milisegundos en el dominio
+  - [x] El test de serialización ya no afirma que Mongo guarda microsegundos
+  - [x] Test explícito de truncamiento `.123456 → .123000`
+  - [x] La documentación del contrato dice que la identidad/deduplicación es por ms
 
 - [ ] **T21: Validaciones cruzadas de `Settings`** · H-07
   - [ ] Un `DEFAULT_LIMIT` mayor que `MAX_LIMIT` impide arrancar con un error explícito
