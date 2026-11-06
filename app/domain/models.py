@@ -18,6 +18,16 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _to_millis(value: datetime) -> datetime:
+    """Normaliza a UTC y trunca los microsegundos a milisegundos.
+
+    La identidad y la deduplicación usan granularidad de 1 ms. Se trunca, no se
+    redondea: `.123456` y `.123000` producen la misma identidad.
+    """
+    utc = _ensure_utc(value)
+    return utc.replace(microsecond=(utc.microsecond // 1000) * 1000)
+
+
 def rfc3339_utc(value: datetime) -> str:
     """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos.
 
@@ -38,7 +48,8 @@ class CreateAuditLogRequest:
         action: Acción realizada (p.ej. `pdf.extract`, `text.delete`).
         entity_type: Tipo de entidad afectada.
         checksum: Suma de verificación del contenido (aceptado tal cual).
-        performed_at: Momento en que ocurrió la acción (ISO 8601 UTC).
+        performed_at: Momento en que ocurrió la acción (ISO 8601 UTC). Se
+            normaliza a UTC y se trunca a milisegundos.
         details: Datos extra. Si no se indica, es `{}`.
     """
 
@@ -50,20 +61,24 @@ class CreateAuditLogRequest:
 
     def __post_init__(self) -> None:
         # Usamos object.__setattr__ porque el dataclass es frozen
-        object.__setattr__(self, "performed_at", _ensure_utc(self.performed_at))
+        object.__setattr__(self, "performed_at", _to_millis(self.performed_at))
 
 
 @dataclass(frozen=True, slots=True)
 class AuditLog:
     """Registro de auditoría ya persistido.
 
+    La identidad y la deduplicación usan `performed_at` con granularidad de
+    1 ms.
+
     Args:
         id: Identificador interno del registro (valor del repositorio).
         action: Acción realizada.
         entity_type: Tipo de entidad afectada.
         checksum: Suma de verificación.
-        performed_at: Momento en que ocurrió la acción (UTC).
-        received_at: Momento en que el servicio recibió la petición (UTC).
+        performed_at: Momento en que ocurrió la acción (UTC, truncado a ms).
+        received_at: Momento en que el servicio recibió la petición (UTC,
+            truncado a ms).
         details: Datos extra. Siempre presente.
     """
 
@@ -77,8 +92,8 @@ class AuditLog:
 
     def __post_init__(self) -> None:
         # Usamos object.__setattr__ porque el dataclass es frozen
-        object.__setattr__(self, "performed_at", _ensure_utc(self.performed_at))
-        object.__setattr__(self, "received_at", _ensure_utc(self.received_at))
+        object.__setattr__(self, "performed_at", _to_millis(self.performed_at))
+        object.__setattr__(self, "received_at", _to_millis(self.received_at))
         if self.details is None:
             object.__setattr__(self, "details", {})
 

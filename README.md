@@ -180,12 +180,14 @@ auditoría que se puede editar no es una auditoría.
 
 **Cuerpo de entrada** (`POST`): `action`, `entity_type`, `checksum`,
 `performed_at` (RFC 3339 con offset) y `details` opcional. Se rechaza cualquier
-clave desconocida de primer nivel.
+clave desconocida de primer nivel. `performed_at` se normaliza a UTC y se trunca
+a milisegundos (`.123456` → `.123000`); la identidad y la deduplicación usan esa
+granularidad de 1 ms.
 
 **Respuestas:** array JSON pelado (nunca `{"logs": [...]}`) con los 7 campos
 `_id`, `action`, `entity_type`, `checksum`, `details`, `performed_at`,
 `received_at`. `_id` es el hex de 24 caracteres del `ObjectId`; las fechas son
-RFC 3339 UTC con `Z`.
+RFC 3339 UTC con `Z` y milisegundos.
 
 **Errores:** `application/problem+json` (RFC 9457) con `type`, `title`, `status`,
 `detail`, `instance` y `code`. Las ocho filas del contrato están en SPEC §7.2;

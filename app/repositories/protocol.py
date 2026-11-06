@@ -38,7 +38,9 @@ class AuditLogRepository(Protocol):
     ) -> AuditLog | None:
         """Buscar un evento para determinar si es un replay por identidad.
 
-        La identidad está formada por `(action, entity_type, checksum, performed_at)`.
+        La identidad está formada por `(action, entity_type, checksum,
+        performed_at)`. `performed_at` usa granularidad de 1 ms: el dominio lo
+        normaliza a UTC y trunca los microsegundos antes de consultar.
         """
         ...
 

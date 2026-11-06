@@ -107,7 +107,7 @@ class AuditLogService:
         return await self._repository.find_by_checksum(checksum)
 
     async def _find_existing(self, request: CreateAuditLogRequest) -> AuditLog | None:
-        """La consulta de la Barrera 1: identidad exacta de §6.3."""
+        """La consulta de la Barrera 1: identidad exacta de §6.3, por ms."""
         return await self._repository.find_replay(
             action=request.action,
             entity_type=request.entity_type,

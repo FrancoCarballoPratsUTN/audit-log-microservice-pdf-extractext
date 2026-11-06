@@ -26,8 +26,10 @@ def to_document(
     """El documento de §6.2 que Mongo debe guardar.
 
     Args:
-        request: Datos del evento, sin `id` ni `received_at`.
-        received_at: Instante (UTC) en que el servidor recibió la petición.
+        request: Datos del evento ya normalizados por el dominio, sin `id` ni
+            `received_at`.
+        received_at: Instante (UTC) en que el servidor recibió la petición;
+            BSON `Date` lo guarda con precisión de milisegundos.
 
     Returns:
         El documento con `_id` nuevo y `details` nunca `null`.
@@ -48,13 +50,13 @@ def to_audit_log(document: Mapping[str, Any]) -> AuditLog:
     servicios consume.
 
     PyMongo devuelve fechas *naive* interpretadas en UTC; `AuditLog` las
-    normaliza a UTC-aware en su `__post_init__`.
+    normaliza a UTC-aware y las trunca a milisegundos en su `__post_init__`.
 
     Args:
         document: Documento leído de Mongo.
 
     Returns:
-        El registro con `id` en hex y fechas con zona horaria.
+        El registro con `id` en hex y fechas UTC con precisión de ms.
     """
     details = document.get("details")
     return AuditLog(
@@ -73,7 +75,8 @@ def render(log: AuditLog) -> dict[str, Any]:
 
     `_id` sale como string plano (el orquestador espera un `string`, no un
     subdocumento `{"$oid": ...}`) y las fechas como RFC 3339 UTC con `Z` y
-    milisegundos, que es lo que parsea `time.Time`.
+    milisegundos, que es lo que parsea `time.Time`. El dominio ya las truncó a
+    ms; `render` no debe reintroducir precisión.
     """
     return {
         "_id": log.id,

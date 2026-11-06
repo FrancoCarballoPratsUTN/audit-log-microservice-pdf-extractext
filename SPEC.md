@@ -675,9 +675,12 @@ esto inexistente en la práctica.
 
 ### 5.4 Preservación del instante del emisor
 
-`performed_at` lo envía el Orquestador y se guarda **tal cual llega**, parseado
-a `datetime` con offset. El orden de la base de datos no lo decide AUDA: la
-fuente de verdad es el reloj del emisor. `received_at` es el reloj de AUDA.
+`performed_at` lo envía el Orquestador y se guarda normalizado a UTC y truncado
+a milisegundos (`.123456` → `.123000`, sin redondear). Esa es la granularidad de
+la identidad y de la deduplicación: dos eventos con la misma tupla dentro del
+mismo milisegundo son el mismo evento. El orden de la base de datos no lo decide
+AUDA: la fuente de verdad es el reloj del emisor. `received_at` es el reloj de
+AUDA, también normalizado a milisegundos en el dominio.
 
 La diferencia entre ambos no es decorativa: es lo que permite responder
 "¿cuándo ocurrió?" y "¿cuándo lo supimos?" por separado, que es exactamente lo
@@ -725,7 +728,8 @@ como una cadena de `401` en producción.
   `text.update`, `text.delete`), así que el `ObjectId` es lo correcto y el
   checksum es un campo indexado.
 - `performed_at` / `received_at` se guardan como BSON `Date` (ordenable,
-  indexable) y se serializan a RFC 3339 UTC con `Z` y milisegundos.
+  indexable), normalizadas a UTC y truncadas a milisegundos en el dominio, y se
+  serializan a RFC 3339 UTC con `Z` y milisegundos.
 - El mapeo documento ⇄ respuesta vive **sólo** en `serialization.py`: el
   servicio nunca ve un `ObjectId` ni un `datetime` crudo.
 - `details` se guarda verbatim, incluyendo las claves con `.` o `$` que

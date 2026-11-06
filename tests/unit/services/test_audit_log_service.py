@@ -100,11 +100,9 @@ async def test_a_new_event_is_inserted_and_reported_as_created() -> None:
     assert fake.find_replay_calls == 1
 
 
-async def test_received_at_comes_from_the_server_and_performed_at_is_untouched() -> (
-    None
-):
+async def test_received_at_is_server_clock_and_performed_at_keeps_its_instant() -> None:
     """SPEC §5.2: `received_at` es el reloj del servidor, no el del emisor; y
-    `performed_at` llega tal cual, sin normalización ni corrección."""
+    `performed_at` conserva el instante del emisor, ya normalizado a ms."""
     fake = FakeAuditLogRepository()
     service = AuditLogService(fake)
     request = make_request()

@@ -7,7 +7,7 @@ fija qué sale de cada rama del `try`; la comprobación contra un servidor real
 `tests/integration/repositories/test_mongo_audit_log_repository.py`.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from bson import ObjectId
@@ -144,14 +144,18 @@ async def test_insert_stores_the_document_and_returns_the_stored_log() -> None:
 
 async def test_insert_stamps_received_at_with_the_server_clock() -> None:
     """No es el `performed_at` del evento: es cuándo lo vimos nosotros, y de
-    eso depende la ventana de retención y el orden global de §6.3."""
+    eso depende la ventana de retención y el orden global de §6.3. El fake no
+    codifica BSON, así que se compara a la precisión de 1 ms que persiste Mongo.
+    """
     collection = RecordingCollection()
 
     log = await MongoAuditLogRepository(collection).insert(make_request())
 
+    stored = collection.inserted[0]["received_at"]
+    assert isinstance(stored, datetime)
     assert abs((datetime.now(UTC) - log.received_at).total_seconds()) < 5
     assert log.received_at.tzinfo is not None
-    assert collection.inserted[0]["received_at"] == log.received_at
+    assert abs(stored - log.received_at) < timedelta(milliseconds=1)
 
 
 async def test_insert_writes_an_empty_object_when_details_are_absent() -> None:

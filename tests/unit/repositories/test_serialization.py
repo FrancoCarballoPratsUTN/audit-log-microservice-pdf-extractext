@@ -73,8 +73,8 @@ def test_to_document_assigns_an_object_id() -> None:
 
 
 def test_to_document_keeps_the_identity_fields_verbatim() -> None:
-    """La identidad de §6.3 son cuatro campos; ninguno se normaliza ni se
-    recorta al guardar."""
+    """La identidad de §6.3 son cuatro campos. `to_document` los copia sin
+    volver a normalizarlos: el dominio ya truncó `performed_at` a milisegundos."""
     request = make_request()
 
     document = to_document(request, received_at=PERFORMED_AT)
@@ -86,8 +86,8 @@ def test_to_document_keeps_the_identity_fields_verbatim() -> None:
 
 
 def test_to_document_stamps_received_at_with_the_given_clock() -> None:
-    """`received_at` lo pica el llamante con el reloj del servidor; el
-    `performed_at` del evento no se toca en ningún caso."""
+    """`received_at` lo pica el llamante con el reloj del servidor y
+    `to_document` lo copia; la normalización a ms pertenece a `AuditLog`."""
     received_at = datetime.now(UTC)
 
     document = to_document(make_request(), received_at=received_at)
@@ -210,8 +210,9 @@ def test_render_converts_any_offset_to_utc_before_formatting() -> None:
 
 
 def test_render_truncates_sub_millisecond_precision() -> None:
-    """Mongo guarda microsegundos y el contrato sólo promete milisegundos:
-    truncar, no redondear (`.7896` → `.789`, nunca `.790`)."""
+    """BSON Date y el contrato comparten precisión de milisegundos; el dominio
+    ya truncó el valor. `render` no debe reintroducir microsegundos ni redondear
+    (`.7896` → `.789`, nunca `.790`)."""
     log = make_log(performed_at=datetime(2026, 10, 5, 12, 34, 56, 789600, tzinfo=UTC))
 
     assert render(log)["performed_at"] == "2026-10-05T12:34:56.789Z"
