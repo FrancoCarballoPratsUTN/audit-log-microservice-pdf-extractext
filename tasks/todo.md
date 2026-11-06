@@ -251,9 +251,9 @@
   - [x] Un `POST` inválido no deja un documento que luego haga fallar el `GET` (test de integración agregado; requiere Mongo para ejecutarse)
 
 ### Checkpoint A — Bloqueantes cerrados
-- [ ] `U` verde.
-- [ ] `L` verde.
-- [ ] Smoke manual: `SIGTERM` limpio, `/readyz` recupera con Mongo, `details` inválidos devuelven `400`.
+- [x] `U` verde.
+- [x] `L` verde.
+- [x] Smoke manual: `SIGTERM` limpio, `/readyz` recupera con Mongo, `details` inválidos devuelven `400`.
 - [ ] Revisión humana antes de pasar a la Fase 7.
 
 ---
