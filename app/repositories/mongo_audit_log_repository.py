@@ -6,11 +6,12 @@ como capacidad del puerto aún sin uso.
 
 Traduce las excepciones del driver según SPEC §6.4 y sólo esas:
 `DuplicateKeyError` es la señal de replay (Barrera 2 de §5.3), `DocumentTooLarge`
-es `413`, y el resto de `PyMongoError` es `503` con un `detail` nuestro, nunca
-el del driver, que trae `host:port` y a veces la URI entera. Cualquier otra
-excepción sube intacta: un `TypeError` es un bug nuestro, y convertirlo en un
-error de almacenamiento escondería el defecto detrás de un reintento que no
-puede arreglarlo.
+es `413`, y los valores que BSON no puede codificar —claves con NUL, enteros
+fuera de 64 bits o anidamiento excesivo— son un `400` de la petición. El resto
+de `PyMongoError` es `503` con un `detail` nuestro, nunca el del driver, que
+trae `host:port` y a veces la URI entera. Cualquier otra excepción sube intacta:
+un `TypeError` es un bug nuestro, y convertirlo en un error de almacenamiento
+escondería el defecto detrás de un reintento que no puede arreglarlo.
 
 No importa nada de `app.api` ni de `app.services`: la dependencia apunta hacia
 adentro y el cableado lo hace el composition root (`app/main.py`), como verifica
@@ -20,10 +21,11 @@ adentro y el cableado lo hace el composition root (`app/main.py`), como verifica
 from datetime import UTC, datetime
 from typing import Any
 
+from bson.errors import BSONError
 from pymongo.errors import DocumentTooLarge, DuplicateKeyError, PyMongoError
 
 from app.domain.models import AuditLog, CreateAuditLogRequest
-from app.errors import AuditStorageError, PayloadTooLargeError
+from app.errors import AuditStorageError, PayloadTooLargeError, ValidationError
 from app.repositories.protocol import ReplayDetected
 from app.repositories.serialization import to_audit_log, to_document
 
@@ -52,6 +54,9 @@ class MongoAuditLogRepository:
                 produce la Barrera 1 (SPEC §5.3).
             PayloadTooLargeError: Si el documento supera los 16 MiB de BSON
                 (SPEC §6.4), el mismo `413` que el límite de body.
+            ValidationError: Si `details` contiene valores que BSON no puede
+                codificar: una clave con NUL, un entero fuera de 64 bits o un
+                anidamiento que agota la pila del codificador.
             AuditStorageError: Cualquier otro fallo del driver: `503`
                 reintentable, con detalle propio y sin `host:port`.
         """
@@ -62,6 +67,10 @@ class MongoAuditLogRepository:
             raise ReplayDetected() from exc
         except DocumentTooLarge as exc:
             raise PayloadTooLargeError() from exc
+        except (BSONError, OverflowError, RecursionError) as exc:
+            raise ValidationError(
+                "The 'details' field cannot be stored in MongoDB."
+            ) from exc
         except PyMongoError as exc:
             raise AuditStorageError(STORAGE_UNAVAILABLE) from exc
         return to_audit_log(document)

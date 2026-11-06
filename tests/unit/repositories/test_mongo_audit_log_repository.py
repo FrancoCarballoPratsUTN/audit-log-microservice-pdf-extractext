@@ -11,10 +11,11 @@ from datetime import UTC, datetime
 
 import pytest
 from bson import ObjectId
+from bson.errors import InvalidDocument
 from pymongo.errors import DocumentTooLarge, DuplicateKeyError, PyMongoError
 
 from app.domain.models import CreateAuditLogRequest
-from app.errors import AuditStorageError, PayloadTooLargeError
+from app.errors import AuditStorageError, PayloadTooLargeError, ValidationError
 from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
 from app.repositories.protocol import ReplayDetected
 
@@ -182,6 +183,38 @@ async def test_a_document_that_is_too_large_is_a_payload_error() -> None:
     collection = RecordingCollection(insert_error=DocumentTooLarge("BSON too large"))
 
     with pytest.raises(PayloadTooLargeError):
+        await MongoAuditLogRepository(collection).insert(make_request())
+
+
+async def test_invalid_bson_is_a_validation_error() -> None:
+    """Una clave con NUL o una estructura que BSON no acepta es un fallo de la
+    petición, no del almacenamiento: `400`, nunca `500` (T19, H-03)."""
+    collection = RecordingCollection(
+        insert_error=InvalidDocument("key 'a\\x00b' must not contain null characters")
+    )
+
+    with pytest.raises(ValidationError):
+        await MongoAuditLogRepository(collection).insert(make_request())
+
+
+async def test_an_integer_beyond_bson_range_is_a_validation_error() -> None:
+    """BSON sólo guarda enteros de 64 bits; el exceso es un `400` (T19)."""
+    collection = RecordingCollection(
+        insert_error=OverflowError("MongoDB can only handle up to 8-byte ints")
+    )
+
+    with pytest.raises(ValidationError):
+        await MongoAuditLogRepository(collection).insert(make_request())
+
+
+async def test_details_nested_too_deeply_are_a_validation_error() -> None:
+    """El codificador BSON agota la pila antes que el JSON: ese anidamiento es
+    un `400`, no un `500` (T19)."""
+    collection = RecordingCollection(
+        insert_error=RecursionError("Stack overflow while encoding an object to BSON")
+    )
+
+    with pytest.raises(ValidationError):
         await MongoAuditLogRepository(collection).insert(make_request())
 
 

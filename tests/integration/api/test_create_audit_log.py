@@ -14,6 +14,7 @@ con uno y leer con el otro.
 
 from urllib.parse import quote
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -28,6 +29,12 @@ VALID_EVENT = {
     "details": {"page_count": 12},
     "performed_at": "2026-10-05T12:34:56.789Z",
 }
+
+RAW_EVENT_PREFIX = (
+    '{"action":"pdf.extract","entity_type":"document",'
+    '"checksum":"9f86d081884c7d659a2feaa0c55ad015",'
+    '"performed_at":"2026-10-05T12:34:56.789Z","details":'
+)
 
 
 async def test_valid_event_gets_201_with_location_and_the_seven_fields(
@@ -144,29 +151,42 @@ async def test_details_over_the_limit_is_413_and_nothing_is_written(
     assert await clean_collection.count_documents({}) == 0
 
 
-async def test_invalid_bson_details_are_rejected_and_get_still_works(
-    deployed: None, clean_collection: object
+@pytest.mark.parametrize(
+    "details_json",
+    [
+        '{"value":NaN}',
+        '{"value":Infinity}',
+        '{"value":-Infinity}',
+        '{"value":18446744073709551616}',
+        r'{"bad\u0000key":1}',
+        "[" * 5000 + "0" + "]" * 5000,
+    ],
+    ids=[
+        "nan",
+        "infinity",
+        "negative-infinity",
+        "integer-overflow",
+        "nul-key",
+        "too-deep",
+    ],
+)
+async def test_invalid_details_are_400_and_do_not_poison_the_listing(
+    deployed: None, clean_collection: object, details_json: str
 ) -> None:
-    """Los valores inválidos se frenan antes de Mongo y no contaminan lecturas."""
-    raw_event = (
-        '{"action":"pdf.extract","entity_type":"document",'
-        '"checksum":"invalid-bson","details":{"bad\\u0000key":"value"},'
-        '"performed_at":"2026-10-05T12:34:56.789Z"}'
-    )
+    """T19: ningún detalle que BSON no puede guardar deja un documento a medias
+    que haga fallar el `GET` siguiente."""
+    body = RAW_EVENT_PREFIX + details_json + "}"
+    headers = {**AUTH, "Content-Type": "application/json"}
 
     with TestClient(create_app()) as client:
-        rejected = client.post(
-            "/audit/logs",
-            content=raw_event,
-            headers={**AUTH, "Content-Type": "application/json"},
-        )
-        listed = client.get("/audit/logs", headers=AUTH)
+        response = client.post("/audit/logs", content=body, headers=headers)
+        listing = client.get("/audit/logs", headers=AUTH)
 
-    assert rejected.status_code == 400
-    assert rejected.json()["code"] == "VALIDATION_ERROR"
-    assert listed.status_code == 200
-    assert listed.json() == []
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION_ERROR"
     assert await clean_collection.count_documents({}) == 0
+    assert listing.status_code == 200
+    assert listing.json() == []
 
 
 async def test_an_arbitrary_checksum_is_accepted_and_the_location_is_escaped(

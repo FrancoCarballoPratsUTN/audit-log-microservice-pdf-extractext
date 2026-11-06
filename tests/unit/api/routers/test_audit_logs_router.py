@@ -166,15 +166,43 @@ def test_details_over_the_limit_returns_413_without_calling_the_service() -> Non
     assert service.created == []
 
 
+def test_a_recursion_error_while_serializing_details_is_400(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un anidamiento que revienta el serializador no puede escapar como `500`."""
+    service = SpyingService(CreateResult(_log(), replay=False))
+    real_dumps = json.dumps
+
+    def dumps(value, *args, **kwargs):
+        if isinstance(value, dict) and value.get("trigger") == "recursion":
+            raise RecursionError("maximum recursion depth exceeded")
+        return real_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr("app.api.routers.audit_logs.json.dumps", dumps)
+
+    response = _post(service, {**VALID_EVENT, "details": {"trigger": "recursion"}})
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert service.created == []
+
+
 @pytest.mark.parametrize(
     "details",
     [
         float("nan"),
         float("inf"),
+        -float("inf"),
         2**63,
         {"bad\x00key": "value"},
     ],
-    ids=["nan", "infinity", "integer-out-of-bson-range", "nul-key"],
+    ids=[
+        "nan",
+        "infinity",
+        "negative-infinity",
+        "integer-out-of-bson-range",
+        "nul-key",
+    ],
 )
 def test_details_that_cannot_be_stored_as_bson_return_400_before_service(
     details: object,

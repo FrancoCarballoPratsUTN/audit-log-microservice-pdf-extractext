@@ -75,7 +75,7 @@ def _request(
         raise ConsulConfigurationError(
             "CONSUL_HTTP_ADDR and CONSUL_HTTP_TOKEN are required"
         )
-    body = None if payload is None else json.dumps(payload).encode()
+    body = None if payload is None else json.dumps(payload, allow_nan=False).encode()
     request = Request(
         f"{address.rstrip('/')}{path}",
         data=body,
