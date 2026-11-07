@@ -33,6 +33,7 @@ por defecto**: sin él el servicio se niega a arrancar.
 | `MAX_SKIP` | `10000` | `skip` máximo aceptado. |
 | `RETENTION_DAYS` | `0` | Días de retención (TTL de Mongo sobre `performed_at`). `0` desactiva el TTL. |
 | `APP_NAME` | `Audit Log Microservice` | Nombre mostrado por la app. |
+| `LOG_LEVEL` | `INFO` | Nivel de log: `DEBUG`, `INFO`, `WARNING`, `ERROR` o `CRITICAL`. Un valor inválido impide arrancar. |
 
 ## Arranque
 

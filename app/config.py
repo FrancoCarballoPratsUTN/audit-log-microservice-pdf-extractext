@@ -16,6 +16,8 @@ from typing import Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
 
 class Settings(BaseSettings):
     """Configuración de ejecución del servicio de auditoría."""
@@ -27,6 +29,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Audit Log Microservice"
+    log_level: str = "INFO"
     service_api_token: SecretStr
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_database: str = "pdf_extractext_audit"
@@ -53,6 +56,20 @@ class Settings(BaseSettings):
                 "'python -c \"import secrets; print(secrets.token_urlsafe(32))\"'"
             )
         return token
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: object) -> object:
+        """Validar el nivel de log al arrancar, no en el import."""
+        if not isinstance(value, str):
+            return value
+        level = value.strip().upper()
+        if level not in LOG_LEVELS:
+            raise ValueError(
+                f"log_level must be one of {', '.join(LOG_LEVELS)} "
+                f"(got {value!r})"
+            )
+        return level
 
     @model_validator(mode="after")
     def validate_related_limits(self) -> Self:

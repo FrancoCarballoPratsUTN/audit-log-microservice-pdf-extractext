@@ -35,7 +35,6 @@ from app.repositories.mongodb import audit_logs_collection, open_client
 from app.repositories.readiness import ReadinessProbe
 from app.services.audit_log_service import AuditLogService
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger(__name__)
 
 
@@ -83,11 +82,13 @@ def _consul_registration() -> dict[str, object] | None:
     }
 
 
-def _configure_logging() -> None:
+def _configure_logging(level: str) -> None:
     logging.basicConfig(
-        level=LOG_LEVEL,
+        level=level,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
+    # basicConfig no hace nada si ya hay handlers; setLevel reaplica el nivel.
+    logging.getLogger().setLevel(level)
 
 
 @asynccontextmanager
@@ -163,9 +164,8 @@ def create_app() -> FastAPI:
         ValidationError: Si `SERVICE_API_TOKEN` falta o está en blanco. El
             servicio no arranca en ese caso, a propósito (SPEC §3.6).
     """
-    _configure_logging()
-
     settings = _settings_from_environment_or_consul()
+    _configure_logging(settings.log_level)
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     register_exception_handlers(app)

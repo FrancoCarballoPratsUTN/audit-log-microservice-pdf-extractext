@@ -30,6 +30,7 @@ services:
       MAX_LIMIT: ${MAX_LIMIT:-100}
       MAX_SKIP: ${MAX_SKIP:-10000}
       RETENTION_DAYS: ${RETENTION_DAYS:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_NAME: ${APP_NAME:-Audit Log Microservice}
     labels:
       - traefik.enable=true

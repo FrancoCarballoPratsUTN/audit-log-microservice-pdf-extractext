@@ -17,6 +17,7 @@ para ejecutarse antes del enrutado, del `415` y del `413` (SPEC §4.3).
 """
 
 import importlib
+import logging
 import signal
 
 import pytest
@@ -64,6 +65,32 @@ def test_factory_refuses_to_build_the_app_with_a_blank_token(
 
     with pytest.raises(ValidationError, match="service_api_token"):
         create_app()
+
+
+def test_invalid_log_level_fails_startup_with_a_clear_message(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOG_LEVEL", "TRACE")
+
+    with pytest.raises(ValidationError, match="log_level must be one of"):
+        create_app()
+
+
+def test_log_level_is_applied_on_each_create_app(
+    configured: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = logging.getLogger()
+    original = root.level
+    try:
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+        create_app()
+        assert root.level == logging.DEBUG
+
+        monkeypatch.setenv("LOG_LEVEL", "ERROR")
+        create_app()
+        assert root.level == logging.ERROR
+    finally:
+        root.setLevel(original)
 
 
 def test_the_boot_error_never_contains_a_token(

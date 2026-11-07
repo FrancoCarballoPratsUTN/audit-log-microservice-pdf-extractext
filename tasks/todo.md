@@ -272,11 +272,11 @@
   - [x] Los valores válidos siguen funcionando igual
   - [x] `model_validator(mode="after")` con mensajes claros y tests de combinaciones inválidas
 
-- [ ] **T22: `LOG_LEVEL` dentro de `Settings`** · H-08
-  - [ ] `LOG_LEVEL` se lee desde `Settings`, no desde `os.getenv` en el import
-  - [ ] Un valor inválido falla al arrancar con un mensaje claro
-  - [ ] El nivel configurado se aplica aunque se cree más de una app en tests
-  - [ ] `.env.example` y la documentación listan la variable
+- [x] **T22: `LOG_LEVEL` dentro de `Settings`** · H-08
+  - [x] `LOG_LEVEL` se lee desde `Settings`, no desde `os.getenv` en el import
+  - [x] Un valor inválido falla al arrancar con un mensaje claro
+  - [x] El nivel configurado se aplica aunque se cree más de una app en tests
+  - [x] `.env.example` y la documentación listan la variable
 
 - [ ] **T23: Quitar handler global de `PydanticValidationError`** · H-09
   - [ ] Un JSON de entrada inválido sigue devolviendo `400 VALIDATION_ERROR`

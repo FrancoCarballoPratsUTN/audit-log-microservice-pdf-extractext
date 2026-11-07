@@ -481,6 +481,7 @@ audit-log-microservice-pdf-extractext/
 | `MAX_LIMIT` | `int` | `100` | tope de `limit` |
 | `MAX_SKIP` | `int` | `10000` | tope de `skip` |
 | `RETENTION_DAYS` | `int` | `0` (desactivado) | TTL sobre `performed_at` |
+| `LOG_LEVEL` | `str` | `INFO` | nivel de log: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
 `SERVICE_API_TOKEN` **no tiene default**: si falta o está vacía,
 `Settings(...)` lanza `ValidationError` dentro del `lifespan` y **la app no

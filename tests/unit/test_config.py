@@ -31,6 +31,7 @@ def test_defaults_match_the_spec() -> None:
     settings = build_settings()
 
     assert settings.app_name == "Audit Log Microservice"
+    assert settings.log_level == "INFO"
     assert settings.mongo_uri == "mongodb://localhost:27017"
     assert settings.mongo_database == "pdf_extractext_audit"
     assert settings.mongo_audit_logs_collection == "audit_logs"
@@ -163,6 +164,15 @@ def test_equal_cross_limits_are_allowed() -> None:
     assert settings.max_details_bytes == settings.max_body_bytes == 64
 
 
+def test_log_level_is_normalized_to_uppercase() -> None:
+    assert build_settings(log_level="debug").log_level == "DEBUG"
+
+
+def test_invalid_log_level_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="log_level must be one of"):
+        build_settings(log_level="TRACE")
+
+
 def test_unknown_variables_are_ignored() -> None:
     """El proceso que lanza el servicio carga su propio entorno; que una
     variable ajena no tumbe el arranque no es negociable."""
@@ -197,10 +207,11 @@ def test_reads_the_real_environment_when_no_mapping_is_given(
 
 
 def test_settings_exposes_every_variable_of_the_spec() -> None:
-    """Doce variables en SPEC §3.6. Una ausente aquí es una variable que nadie
+    """Trece variables en SPEC §3.6. Una ausente aquí es una variable que nadie
     puede configurar."""
     expected = {
         "app_name",
+        "log_level",
         "service_api_token",
         "mongo_uri",
         "mongo_database",
