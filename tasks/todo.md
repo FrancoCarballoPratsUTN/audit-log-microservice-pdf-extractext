@@ -278,10 +278,10 @@
   - [x] El nivel configurado se aplica aunque se cree más de una app en tests
   - [x] `.env.example` y la documentación listan la variable
 
-- [ ] **T23: Quitar handler global de `PydanticValidationError`** · H-09
-  - [ ] Un JSON de entrada inválido sigue devolviendo `400 VALIDATION_ERROR`
-  - [ ] Un `PydanticValidationError` interno devuelve `500 INTERNAL_ERROR` y deja la causa en el log
-  - [ ] No queda registro del tipo base en `register_exception_handlers`
+- [x] **T23: Quitar handler global de `PydanticValidationError`** · H-09
+  - [x] Un JSON de entrada inválido sigue devolviendo `400 VALIDATION_ERROR`
+  - [x] Un `PydanticValidationError` interno devuelve `500 INTERNAL_ERROR` y deja la causa en el log
+  - [x] No queda registro del tipo base en `register_exception_handlers`
 
 - [ ] **T24: Autenticación robusta con credenciales no ASCII** · H-12
   - [ ] Una credencial con acentos devuelve `401`, no `500`

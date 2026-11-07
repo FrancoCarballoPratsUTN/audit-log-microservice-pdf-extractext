@@ -98,7 +98,6 @@ async def unexpected_exception_handler(
 def register_exception_handlers(app: FastAPI) -> None:
     """Enganchar los handlers a `app`. Se invoca una vez, desde la fábrica."""
     app.add_exception_handler(ServiceError, service_error_handler)
-    app.add_exception_handler(PydanticValidationError, validation_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unexpected_exception_handler)

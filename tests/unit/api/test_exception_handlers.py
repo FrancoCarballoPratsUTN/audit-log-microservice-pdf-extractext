@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.exception_handlers import register_exception_handlers
@@ -46,6 +47,10 @@ def build_app() -> FastAPI:
     @app.get("/explode")
     async def raise_unexpected_error() -> None:
         raise RuntimeError("connection string with a password in it")
+
+    @app.get("/internal-validation")
+    async def raise_internal_validation_error() -> None:
+        AuditEventRequest.model_validate({})
 
     @app.get("/teapot")
     async def raise_unmapped_http_error() -> None:
@@ -179,6 +184,21 @@ def test_unexpected_exception_does_not_leak_a_traceback(client: TestClient) -> N
     response = client.get("/explode")
 
     assert "RuntimeError" not in response.text
+
+
+def test_internal_pydantic_validation_error_becomes_a_500(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    response = client.get("/internal-validation")
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert "internal-validation" in caplog.text
+    assert any(record.exc_info for record in caplog.records)
+
+
+def test_pydantic_validation_error_has_no_global_handler() -> None:
+    assert PydanticValidationError not in build_app().exception_handlers
 
 
 def test_unknown_route_is_a_404_problem(client: TestClient) -> None:
