@@ -1,0 +1,118 @@
+# Reglas de supresión para grype.
+#
+# 1) openssl: FALSOS POSITIVOS. Debian publica los parches de seguridad como
+#    backports sin cambiar la versión upstream. La imagen instala
+#    openssl/libssl3t64 3.5.7-1~deb13u3, que ya incluye las correcciones de:
+#      - DSA-6465-1 (fijado en 3.5.7-1~deb13u2)
+#      - DSA-6531-1 (fijado en 3.5.7-1~deb13u3)
+#    Grype las reporta porque su catalogador "binary" compara la cadena de
+#    versión upstream (3.5.7 < 3.5.8/3.5.9) y no aplica el mapeo de versiones
+#    de Debian. Verificado contra el Debian Security Tracker el 2026-11-07:
+#    https://security-tracker.debian.org/tracker/source-package/openssl
+#    (todos estos CVE aparecen como "Resolved issues" para trixie).
+#
+# 2) python: CVEs del intérprete CPython 3.14.10 (compilado desde fuentes por
+#    la imagen base python:3.14-slim, no es paquete Debian). No existe parche
+#    en la rama 3.14: las correcciones solo están en 3.15.0a6 / 3.16.0.
+#    Severidad Medium/Low y EPSS bajo (~0.3-0.4%): riesgo aceptado.
+#    Revisar al migrar la imagen base a python:3.16-slim.
+#
+# 3) Paquetes del SO marcados "(won't fix)" por Debian: su Security Team trió
+#    esos CVEs y decidió no corregirlos (requieren acceso local, configuración
+#    no por defecto o son impracticables). Política adoptada: heredamos ese
+#    triaje. Una sola regla por fix-state los cubre todos, presentes y futuros.
+#
+# 4) CVEs históricos Negligible que Debian considera no importantes (no-DSA):
+#    sin exploit práctico conocido y, en este contenedor, sin contexto de
+#    explotación (usuario no-root, sin shell interactiva, sin logins locales,
+#    sin compilador en uso). Se listan explícitamente para auditoría.
+#
+# NO se suprimen a propósito: gzip CVE-2026-41992/41991 y zlib1g
+# CVE-2026-76844/85091, aún sin parche de Debian. Permanecen visibles hasta
+# que un rebuild con `docker build --pull` incorpore la corrección.
+ignore:
+  # --- openssl (falsos positivos por backport de Debian) ---
+  - vulnerability: CVE-2026-18798
+    package: { name: openssl }
+  - vulnerability: CVE-2026-63076
+    package: { name: openssl }
+  - vulnerability: CVE-2026-63073
+    package: { name: openssl }
+  - vulnerability: CVE-2026-14457
+    package: { name: openssl }
+  - vulnerability: CVE-2026-63072
+    package: { name: openssl }
+  - vulnerability: CVE-2026-84782
+    package: { name: openssl }
+  - vulnerability: CVE-2026-75806
+    package: { name: openssl }
+  - vulnerability: CVE-2026-14456
+    package: { name: openssl }
+  - vulnerability: CVE-2026-54873
+    package: { name: openssl }
+  - vulnerability: CVE-2026-54874
+    package: { name: openssl }
+  - vulnerability: CVE-2026-84784
+    package: { name: openssl }
+  - vulnerability: CVE-2026-63075
+    package: { name: openssl }
+  - vulnerability: CVE-2026-63074
+    package: { name: openssl }
+  - vulnerability: CVE-2026-72897
+    package: { name: openssl }
+  - vulnerability: CVE-2026-75804
+    package: { name: openssl }
+  - vulnerability: CVE-2026-42772
+    package: { name: openssl }
+  - vulnerability: CVE-2026-35191
+    package: { name: openssl }
+  - vulnerability: CVE-2026-75803
+    package: { name: openssl }
+  - vulnerability: CVE-2026-75805
+    package: { name: openssl }
+  - vulnerability: CVE-2026-35189
+    package: { name: openssl }
+  - vulnerability: CVE-2026-54875
+    package: { name: openssl }
+  - vulnerability: CVE-2026-54872
+    package: { name: openssl }
+  - vulnerability: CVE-2026-77696
+    package: { name: openssl }
+  # --- python (sin parche en la rama 3.14; riesgo aceptado) ---
+  - vulnerability: CVE-2025-15367
+    package: { name: python }
+  - vulnerability: CVE-2026-116566
+    package: { name: python }
+  - vulnerability: CVE-2026-103995
+    package: { name: python }
+  # --- Paquetes SO "won't fix" por Debian: triaje heredado (sección 3) ---
+  - fix-state: wont-fix
+  # --- Históricos Negligible sin exploit práctico (sección 4) ---
+  - vulnerability: CVE-2018-20796 # glibc
+  - vulnerability: CVE-2010-4756 # glibc
+  - vulnerability: CVE-2019-1010022 # glibc
+  - vulnerability: CVE-2019-1010023 # glibc
+  - vulnerability: CVE-2019-1010024 # glibc
+  - vulnerability: CVE-2019-1010025 # glibc
+  - vulnerability: CVE-2019-9192 # glibc
+  - vulnerability: CVE-2005-2541 # tar
+  - vulnerability: CVE-2007-5686 # shadow
+  - vulnerability: CVE-2021-45346 # sqlite3
+  - vulnerability: CVE-2025-70873 # sqlite3
+  - vulnerability: CVE-2011-3374 # apt
+  - vulnerability: CVE-2017-18018 # coreutils
+  - vulnerability: CVE-2025-5278 # coreutils
+  - vulnerability: CVE-2026-56392 # coreutils
+  - vulnerability: CVE-2026-56391 # coreutils
+  - vulnerability: CVE-2013-4392 # systemd
+  - vulnerability: CVE-2023-31437 # systemd
+  - vulnerability: CVE-2023-31438 # systemd
+  - vulnerability: CVE-2023-31439 # systemd
+  - vulnerability: CVE-2011-4116 # perl
+  - vulnerability: CVE-2022-0563 # util-linux
+  - vulnerability: CVE-2026-102474 # dash
+  - vulnerability: CVE-2026-102473 # dash
+  - vulnerability: CVE-2026-53910 # diffutils
+  # --- busybox: nucleo de Alpine (no removible), sin parche publicado;
+  #     contenedor no-root y healthcheck exec-form, sin shell en runtime ---
+  - vulnerability: CVE-2025-60876

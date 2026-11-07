@@ -55,22 +55,30 @@ Documentación interactiva: <http://localhost:8083/docs> (y `/openapi.json`).
 Plan y checklist: [`tasks/docker-plan.md`](./tasks/docker-plan.md) y
 [`tasks/docker-todo.md`](./tasks/docker-todo.md).
 
-Imagen de producción multi-stage (`uv`, non-root) y stack local con
-`docker-compose.yml`. AUDA **no** levanta su propio Traefik: se une a la red
-`proxy` del edge que ya levanta Persistencia y se sirve bajo
-`Host(\`audit.localhost\`)`. El puerto `8083` del host sigue siendo el de
-`AUDIT_LOG_BASE_URL`.
+Imagen de producción multi-stage (`uv`, non-root) y stack del servicio con
+`docker-compose.yml`. AUDA **no** levanta su propio Traefik ni MongoDB: usa los
+servicios compartidos de `D:\Services`, se une a la red `mired` y se sirve bajo
+`Host(\`audit.universidad.localhost\`)`. El puerto `8083` del host sigue siendo el
+de `AUDIT_LOG_BASE_URL` para el orquestador.
 
 ```bash
-# El Traefik compartido debe estar arriba (o: docker network create proxy)
+# Deben estar arriba el Traefik y MongoDB compartidos, y existir la red mired.
 docker compose up --build -d
 
 curl http://localhost:8083/health        # directo
-curl http://audit.localhost/health       # vía Traefik compartido
+curl -k https://audit.universidad.localhost/health  # vía Traefik compartido
 ```
 
-`SERVICE_API_TOKEN` se lee del `.env` (ver `.env.example`); sin él, compose falla
-al levantar. `mongo` corre en una red interna sin puerto al host.
+En Windows, si el host no resuelve, fuerza la IP con `--resolve`:
+
+```bash
+curl -k --resolve audit.universidad.localhost:443:127.0.0.1 \
+    https://audit.universidad.localhost/health
+```
+
+`SERVICE_API_TOKEN` y `MONGO_URI` se leen del `.env` (ver `.env.example`); sin
+ellos, compose falla al levantar. MongoDB corre en el stack compartido y el
+compose de AUDA no publica su puerto.
 
 ## Pruebas de stress (Vegeta + k6)
 
