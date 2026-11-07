@@ -289,10 +289,10 @@
   - [x] No se registra el valor del token ni de la credencial
   - [x] La documentación de despliegue incluye el rate limit de `401` como mitigación de flood
 
-- [ ] **T25: Sanear `X-Request-ID`** · H-13
-  - [ ] Un `X-Request-ID` válido se conserva y se devuelve igual
-  - [ ] Un ID inválido, vacío o demasiado largo se reemplaza por un UUID
-  - [ ] Los logs no pueden ser inyectados con saltos de línea desde esa cabecera
+- [x] **T25: Sanear `X-Request-ID`** · H-13
+  - [x] Un `X-Request-ID` válido se conserva y se devuelve igual
+  - [x] Un ID inválido, vacío o demasiado largo se reemplaza por un UUID
+  - [x] Los logs no pueden ser inyectados con saltos de línea desde esa cabecera
 
 - [ ] **T26: Cerrar bypass del límite de body** · H-10
   - [ ] Un `POST` sin `Content-Length` no llega a Pydantic y devuelve `413`

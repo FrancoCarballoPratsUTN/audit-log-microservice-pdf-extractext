@@ -28,6 +28,7 @@ transporte, no reglas de negocio (SPEC §3.1).
 """
 
 import logging
+import re
 import time
 import uuid
 
@@ -44,6 +45,8 @@ from app.errors import PayloadTooLargeError, UnsupportedMediaTypeError
 logger = logging.getLogger(__name__)
 
 REQUEST_ID_HEADER = "X-Request-ID"
+# Sólo IDs cortos y seguros: evita saltos de línea y logs gigantes.
+REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
 CONTENT_TYPE_HEADER = "Content-Type"
 CONTENT_LENGTH_HEADER = "Content-Length"
 JSON_MEDIA_TYPE = "application/json"
@@ -74,7 +77,7 @@ def parse_content_length(value: str | None) -> int:
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
-    """Eco de `X-Request-ID`, generándolo si el llamador no lo envía.
+    """Eco de `X-Request-ID`, generándolo si falta o no es seguro.
 
     El identificador se deja en `request.state.request_id` para que el log de
     acceso y cualquier capa interna lo reutilicen sin volver a mirar la cabecera.
@@ -84,10 +87,11 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Resolver el identificador, seguir la cadena y devolverlo en la respuesta."""
-        inbound = request.headers.get(REQUEST_ID_HEADER)
-        request_id = (
-            inbound.strip() if inbound and inbound.strip() else uuid.uuid4().hex
-        )
+        inbound_request_id = request.headers.get(REQUEST_ID_HEADER, "").strip()
+        if REQUEST_ID_PATTERN.fullmatch(inbound_request_id):
+            request_id = inbound_request_id
+        else:
+            request_id = uuid.uuid4().hex
         request.state.request_id = request_id
 
         response = await call_next(request)

@@ -21,6 +21,7 @@ servidor lo lee—.
 """
 
 import logging
+import uuid
 from pathlib import Path
 
 import pytest
@@ -207,12 +208,29 @@ def test_a_missing_request_id_is_generated(client: TestClient) -> None:
     assert response.headers["x-request-id"]
 
 
-def test_a_blank_request_id_is_regenerated(client: TestClient) -> None:
-    response = client.get("/health", headers={"X-Request-ID": "   "})
+@pytest.mark.parametrize(
+    "value",
+    ["   ", "x" * 65, "no valido"],
+    ids=["vacío", "demasiado largo", "espacio"],
+)
+def test_an_invalid_request_id_is_regenerated(
+    client: TestClient, value: str
+) -> None:
+    response = client.get("/health", headers={"X-Request-ID": value})
 
-    request_id = response.headers["x-request-id"]
-    assert request_id.strip() == request_id
-    assert request_id != ""
+    assert uuid.UUID(response.headers["x-request-id"])
+
+
+def test_newlines_in_a_request_id_do_not_reach_the_log(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger="app.api.middleware"):
+        response = client.get(
+            "/health", headers={"X-Request-ID": "trace\nINJECTED"}
+        )
+
+    assert "INJECTED" not in caplog.text
+    assert "\n" not in response.headers["x-request-id"]
 
 
 def test_the_request_id_survives_a_rejected_request(client: TestClient) -> None:
