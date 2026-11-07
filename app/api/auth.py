@@ -81,7 +81,8 @@ def is_authorized(authorization: str | None, token: str) -> bool:
     if not credential.strip():
         logger.info("rejected request: %s", REASON_EMPTY)
         return False
-    if not secrets.compare_digest(credential, token):
+    # compare_digest no acepta str no ASCII; con bytes sigue siendo tiempo constante.
+    if not secrets.compare_digest(credential.encode(), token.encode()):
         logger.info("rejected request: %s", REASON_MISMATCH)
         return False
     return True

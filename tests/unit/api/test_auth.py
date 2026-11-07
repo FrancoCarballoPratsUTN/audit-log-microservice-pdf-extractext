@@ -15,13 +15,14 @@ vivacidad es un servicio al que matan.
 """
 
 import ast
+import logging
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.auth import PUBLIC_PATHS, BearerAuthMiddleware
+from app.api.auth import PUBLIC_PATHS, BearerAuthMiddleware, is_authorized
 from app.api.exception_handlers import register_exception_handlers
 
 TOKEN = "s3cr3t-shared-token"
@@ -112,6 +113,24 @@ def test_the_scheme_is_compared_case_insensitively(
     response = client.get("/audit/logs", headers={"Authorization": f"{scheme} {TOKEN}"})
 
     assert response.status_code == 200
+
+
+def test_a_credential_with_non_ascii_characters_is_rejected() -> None:
+    assert not is_authorized("Bearer señal", TOKEN)
+
+
+def test_a_token_with_non_ascii_characters_is_accepted() -> None:
+    assert is_authorized("Bearer señal-segura-ñ", "señal-segura-ñ")
+
+
+def test_neither_the_token_nor_the_credential_is_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    is_authorized("Bearer señal", TOKEN)
+
+    assert "señal" not in caplog.text
+    assert TOKEN not in caplog.text
 
 
 def test_the_token_value_is_compared_case_sensitively(client: TestClient) -> None:

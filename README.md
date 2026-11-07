@@ -81,6 +81,10 @@ curl -k --resolve audit.universidad.localhost:443:127.0.0.1 \
 ellos, compose falla al levantar. MongoDB corre en el stack compartido y el
 compose de AUDA no publica su puerto.
 
+El despliegue debe limitar la tasa de respuestas `401` en Traefik (middleware
+`rateLimit` sobre el router de AUDA) como mitigación de floods de credenciales
+inválidas.
+
 ## Pruebas de stress (Vegeta + k6)
 
 Plan y checklist: [`tasks/stress-plan.md`](./tasks/stress-plan.md) y

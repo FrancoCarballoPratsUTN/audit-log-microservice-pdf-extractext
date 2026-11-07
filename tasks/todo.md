@@ -283,11 +283,11 @@
   - [x] Un `PydanticValidationError` interno devuelve `500 INTERNAL_ERROR` y deja la causa en el log
   - [x] No queda registro del tipo base en `register_exception_handlers`
 
-- [ ] **T24: Autenticación robusta con credenciales no ASCII** · H-12
-  - [ ] Una credencial con acentos devuelve `401`, no `500`
-  - [ ] Un token configurado con caracteres no ASCII funciona correctamente
-  - [ ] No se registra el valor del token ni de la credencial
-  - [ ] La documentación de despliegue incluye el rate limit de `401` como mitigación de flood
+- [x] **T24: Autenticación robusta con credenciales no ASCII** · H-12
+  - [x] Una credencial con acentos devuelve `401`, no `500`
+  - [x] Un token configurado con caracteres no ASCII funciona correctamente
+  - [x] No se registra el valor del token ni de la credencial
+  - [x] La documentación de despliegue incluye el rate limit de `401` como mitigación de flood
 
 - [ ] **T25: Sanear `X-Request-ID`** · H-13
   - [ ] Un `X-Request-ID` válido se conserva y se devuelve igual
