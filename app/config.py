@@ -11,8 +11,9 @@ del tipo, no decoración.
 """
 
 from collections.abc import Mapping
+from typing import Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +54,27 @@ class Settings(BaseSettings):
             )
         return token
 
+    @model_validator(mode="after")
+    def validate_related_limits(self) -> Self:
+        """Las parejas de límites deben ser coherentes entre sí.
+
+        Estas reglas no caben en un `Field(...)`: dependen de dos variables. El
+        mensaje nombra ambas y sus valores, porque es lo único que verá el
+        operador cuando el servicio se niega a arrancar.
+        """
+        if self.default_limit > self.max_limit:
+            raise ValueError(
+                "default_limit must be less than or equal to max_limit "
+                f"(default_limit={self.default_limit} > max_limit={self.max_limit})"
+            )
+        if self.max_details_bytes > self.max_body_bytes:
+            raise ValueError(
+                "max_details_bytes must be less than or equal to max_body_bytes "
+                f"(max_details_bytes={self.max_details_bytes} > "
+                f"max_body_bytes={self.max_body_bytes})"
+            )
+        return self
+
 
 def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
     """Construir la configuración.
@@ -70,8 +92,9 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
         La configuración validada.
 
     Raises:
-        ValidationError: Si falta el token o está en blanco, o si un límite no es
-            un número positivo.
+        ValidationError: Si falta el token o está en blanco, si un límite no es
+            un número positivo, o si una pareja de límites es incoherente:
+            `default_limit > max_limit` o `max_details_bytes > max_body_bytes`.
     """
     if environ is None:
         return Settings()

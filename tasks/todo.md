@@ -266,11 +266,11 @@
   - [x] Test explícito de truncamiento `.123456 → .123000`
   - [x] La documentación del contrato dice que la identidad/deduplicación es por ms
 
-- [ ] **T21: Validaciones cruzadas de `Settings`** · H-07
-  - [ ] Un `DEFAULT_LIMIT` mayor que `MAX_LIMIT` impide arrancar con un error explícito
-  - [ ] `MAX_DETAILS_BYTES > MAX_BODY_BYTES` impide arrancar
-  - [ ] Los valores válidos siguen funcionando igual
-  - [ ] `model_validator(mode="after")` con mensajes claros y tests de combinaciones inválidas
+- [x] **T21: Validaciones cruzadas de `Settings`** · H-07
+  - [x] Un `DEFAULT_LIMIT` mayor que `MAX_LIMIT` impide arrancar con un error explícito
+  - [x] `MAX_DETAILS_BYTES > MAX_BODY_BYTES` impide arrancar
+  - [x] Los valores válidos siguen funcionando igual
+  - [x] `model_validator(mode="after")` con mensajes claros y tests de combinaciones inválidas
 
 - [ ] **T22: `LOG_LEVEL` dentro de `Settings`** · H-08
   - [ ] `LOG_LEVEL` se lee desde `Settings`, no desde `os.getenv` en el import

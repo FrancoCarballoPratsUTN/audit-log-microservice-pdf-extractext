@@ -127,6 +127,42 @@ def test_overrides_replace_the_defaults() -> None:
     assert settings.mongo_database == "otro"
 
 
+def test_default_limit_cannot_exceed_max_limit() -> None:
+    """Un default por encima del tope paginaría más de lo permitido sin que el
+    cliente lo pidiera."""
+    with pytest.raises(
+        ValidationError,
+        match=r"default_limit must be less than or equal to max_limit "
+        r"\(default_limit=11 > max_limit=10\)",
+    ):
+        build_settings(default_limit="11", max_limit="10")
+
+
+def test_max_details_bytes_cannot_exceed_max_body_bytes() -> None:
+    """Si `details` puede ser más grande que el body, la barrera de `details`
+    nunca dispara: la protección real queda sólo en el middleware."""
+    with pytest.raises(
+        ValidationError,
+        match=r"max_details_bytes must be less than or equal to max_body_bytes "
+        r"\(max_details_bytes=1048577 > max_body_bytes=1048576\)",
+    ):
+        build_settings(max_details_bytes="1048577", max_body_bytes="1048576")
+
+
+def test_equal_cross_limits_are_allowed() -> None:
+    """El borde es válido: `<=` no es `<`. Un default igual al tope es coherente
+    y un `details` igual al body cabe justo."""
+    settings = build_settings(
+        default_limit="10",
+        max_limit="10",
+        max_details_bytes="64",
+        max_body_bytes="64",
+    )
+
+    assert settings.default_limit == settings.max_limit == 10
+    assert settings.max_details_bytes == settings.max_body_bytes == 64
+
+
 def test_unknown_variables_are_ignored() -> None:
     """El proceso que lanza el servicio carga su propio entorno; que una
     variable ajena no tumbe el arranque no es negociable."""
@@ -152,12 +188,12 @@ def test_reads_the_real_environment_when_no_mapping_is_given(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SERVICE_API_TOKEN", "from-the-process")
-    monkeypatch.setenv("MAX_LIMIT", "7")
+    monkeypatch.setenv("MAX_LIMIT", "10")
 
     settings = get_settings()
 
     assert settings.service_api_token.get_secret_value() == "from-the-process"
-    assert settings.max_limit == 7
+    assert settings.max_limit == 10
 
 
 def test_settings_exposes_every_variable_of_the_spec() -> None:
