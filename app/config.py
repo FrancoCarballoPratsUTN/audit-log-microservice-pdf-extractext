@@ -4,11 +4,14 @@
 (SPEC §3.6). El token es `SecretStr` para que nunca filtre por `repr` ni logs.
 """
 
+import os
 from collections.abc import Mapping
 from typing import Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.consul import load_prefix
 
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
@@ -99,3 +102,20 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
         _env_file=None,
         **{key.lower(): value for key, value in environ.items()},
     )
+
+
+def load_settings() -> Settings:
+    """Resolver la configuración desde el entorno o desde Consul.
+
+    Cuando `CONSUL_ENABLED=true`, lee las claves del prefix KV de Consul;
+    de lo contrario, lee del entorno y del archivo `.env`.
+    """
+    if os.getenv("CONSUL_ENABLED", "").lower() != "true":
+        return get_settings()
+    values = load_prefix(
+        os.getenv("CONSUL_HTTP_ADDR", ""),
+        os.getenv("CONSUL_HTTP_TOKEN", ""),
+        os.getenv("CONSUL_KV_PREFIX", ""),
+        ca_file=os.getenv("CONSUL_HTTP_CA_FILE"),
+    )
+    return get_settings(values)

@@ -12,20 +12,17 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.middleware import install_middleware
 from app.api.routers.audit_logs import router as audit_logs_router
 from app.api.routers.health import router as health_router
-from app.bootstrap.consul import (
-    consul_registration,
-    settings_from_environment_or_consul,
-)
-from app.bootstrap.logging import configure_logging
-from app.config import Settings
-from app.consul_agent import deregister_service, register_service
+from app.config import Settings, load_settings
+from app.consul_agent import consul_registration, deregister_service, register_service
 from app.errors import AuditStorageError
+from app.logging import configure_logging
 from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
 from app.repositories.mongodb import audit_logs_collection, open_client
 from app.repositories.readiness import ReadinessProbe
@@ -83,7 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    settings = settings_from_environment_or_consul()
+    settings = load_settings()
     configure_logging(settings.log_level)
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -95,3 +92,12 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.api_token = settings.service_api_token.get_secret_value()
     return app
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:create_app",
+        factory=True,
+        host="0.0.0.0",
+        port=8083,
+    )

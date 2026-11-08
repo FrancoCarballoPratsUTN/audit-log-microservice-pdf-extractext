@@ -2,12 +2,8 @@
 
 import pytest
 
-from app.bootstrap.consul import (
-    consul_registration as _consul_registration,
-)
-from app.bootstrap.consul import (
-    settings_from_environment_or_consul as _settings_from_environment_or_consul,
-)
+from app.config import load_settings as _load_settings
+from app.consul_agent import consul_registration as _consul_registration
 from tests.unit._main_common import TOKEN
 
 
@@ -19,10 +15,10 @@ def test_consul_configuration_is_loaded_when_enabled(
     monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")
     monkeypatch.setenv("CONSUL_KV_PREFIX", "app/auditlog")
     monkeypatch.setattr(
-        "app.bootstrap.consul.load_prefix",
+        "app.config.load_prefix",
         lambda *_args, **_kwargs: {"SERVICE_API_TOKEN": TOKEN},
     )
-    settings = _settings_from_environment_or_consul()
+    settings = _load_settings()
     assert settings.service_api_token.get_secret_value() == TOKEN
 
 

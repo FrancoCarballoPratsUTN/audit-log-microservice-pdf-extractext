@@ -42,6 +42,14 @@ uv sync
 uv run uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8083 --no-access-log
 ```
 
+También se puede arrancar con el punto de entrada clásico:
+
+```bash
+uv run python app/main.py
+# o
+python -m app.main
+```
+
 `--factory` es necesario: la configuración se resuelve en el `lifespan`, así que
 importar `app.main` no exige entorno. El puerto `8083` es el que espera el
 orquestador por defecto (`AUDIT_LOG_BASE_URL`).
