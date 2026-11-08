@@ -48,89 +48,76 @@ class UnauthorizedError(ServiceError):
     """Token Bearer ausente, vacío, mal formado o incorrecto. Los cuatro casos
     comparten un mismo `detail` a propósito: distinguirlos le daría a un atacante
     un oráculo para adivinar tokens (SPEC §4.2)."""
-
-    status = 401
-    code = "UNAUTHORIZED"
-    type_uri = "/problems/unauthorized"
-    title = "Unauthorized"
-    default_detail = "Missing or invalid bearer token."
+    status, code, type_uri, title, default_detail = (
+        401, "UNAUTHORIZED", "/problems/unauthorized", "Unauthorized",
+        "Missing or invalid bearer token.",
+    )
     headers = {"WWW-Authenticate": "Bearer"}
 
 
 class ValidationError(ServiceError):
-    """Petición estructuralmente inválida: JSON malformado, tipos equivocados, un
-    campo requerido ausente, una clave desconocida de primer nivel, un
+    """Petición estructuralmente inválida: JSON malformado, tipos equivocados,
+    un campo requerido ausente, una clave desconocida de primer nivel, un
     `performed_at` sin offset, o un `skip`/`limit` fuera de rango."""
-
-    status = 400
-    code = "VALIDATION_ERROR"
-    type_uri = "/problems/validation_error"
-    title = "Request validation error"
-    default_detail = "The request did not satisfy the API contract."
+    status, code, type_uri, title, default_detail = (
+        400, "VALIDATION_ERROR", "/problems/validation_error",
+        "Request validation error",
+        "The request did not satisfy the API contract.",
+    )
 
 
 class NotFoundError(ServiceError):
     """Ninguna ruta coincide con el path de la petición."""
-
-    status = 404
-    code = "NOT_FOUND"
-    type_uri = "/problems/not_found"
-    title = "Resource not found"
-    default_detail = "The requested resource does not exist."
+    status, code, type_uri, title, default_detail = (
+        404, "NOT_FOUND", "/problems/not_found", "Resource not found",
+        "The requested resource does not exist.",
+    )
 
 
 class MethodNotAllowedError(ServiceError):
     """Verbo no soportado por la ruta. Es así como se rechazan `PUT` y `DELETE`
     sobre `/audit/logs`: un log de auditoría que se puede editar no es una
     auditoría (SPEC §6.2)."""
-
-    status = 405
-    code = "METHOD_NOT_ALLOWED"
-    type_uri = "/problems/method_not_allowed"
-    title = "Method not allowed"
-    default_detail = "This resource is append-only; that verb does not exist."
+    status, code, type_uri, title, default_detail = (
+        405, "METHOD_NOT_ALLOWED", "/problems/method_not_allowed",
+        "Method not allowed",
+        "This resource is append-only; that verb does not exist.",
+    )
 
 
 class PayloadTooLargeError(ServiceError):
     """Se superó uno de tres límites distintos: el body de 1 MiB, el campo
     `details` de 64 KiB o el documento BSON de 16 MiB (SPEC §7.2)."""
-
-    status = 413
-    code = "PAYLOAD_TOO_LARGE"
-    type_uri = "/problems/payload_too_large"
-    title = "Payload too large"
-    default_detail = "The payload exceeds the accepted size."
+    status, code, type_uri, title, default_detail = (
+        413, "PAYLOAD_TOO_LARGE", "/problems/payload_too_large",
+        "Payload too large", "The payload exceeds the accepted size.",
+    )
 
 
 class UnsupportedMediaTypeError(ServiceError):
     """`Content-Type` distinto de `application/json` en una petición con cuerpo."""
-
-    status = 415
-    code = "UNSUPPORTED_MEDIA_TYPE"
-    type_uri = "/problems/unsupported_media_type"
-    title = "Unsupported media type"
-    default_detail = "Content-Type must be application/json."
+    status, code, type_uri, title, default_detail = (
+        415, "UNSUPPORTED_MEDIA_TYPE", "/problems/unsupported_media_type",
+        "Unsupported media type", "Content-Type must be application/json.",
+    )
 
 
 class InternalError(ServiceError):
     """Fallo no previsto. Siempre el último recurso: todo lo que llega aquí
     escapó a cualquier handler específico, y la causa pertenece al log, nunca a
     la respuesta (SPEC §7.1)."""
-
-    status = 500
-    code = "INTERNAL_ERROR"
-    type_uri = "/problems/internal_error"
-    title = "Internal server error"
-    default_detail = "The service failed to handle the request."
+    status, code, type_uri, title, default_detail = (
+        500, "INTERNAL_ERROR", "/problems/internal_error",
+        "Internal server error", "The service failed to handle the request.",
+    )
 
 
 class AuditStorageError(ServiceError):
     """MongoDB inalcanzable o con error. `503` y no `500` porque es
     infraestructura que quien llama puede reintentar; un `500` le quitaría esa
     opción (SPEC §6.4)."""
-
-    status = 503
-    code = "AUDIT_STORAGE_ERROR"
-    type_uri = "/problems/audit_storage_error"
-    title = "Audit storage unavailable"
-    default_detail = "The audit storage is temporarily unavailable."
+    status, code, type_uri, title, default_detail = (
+        503, "AUDIT_STORAGE_ERROR", "/problems/audit_storage_error",
+        "Audit storage unavailable",
+        "The audit storage is temporarily unavailable.",
+    )

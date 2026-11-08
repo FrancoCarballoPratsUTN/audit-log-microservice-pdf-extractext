@@ -421,9 +421,9 @@
   - [x] `mongodb.py` ≤ 100 líneas (96)
   - [x] `index_specs.py` ≤ 80 líneas (71)
 
-- [ ] **T35: Comprimir errors.py con factory de errores**
-  - [ ] `errors.py` ≤ 100 líneas
-  - [ ] Matriz de 8 errores preservada intacta
+- [x] **T35: Comprimir errors.py con factory de errores**
+  - [x] `errors.py` ≤ 100 líneas (97)
+  - [x] Matriz de 8 errores preservada intacta
 
 - [ ] **T36: Eliminar get_settings_from_values duplicado en config.py**
   - [ ] `config.py` ≤ 100 líneas
