@@ -2,9 +2,7 @@
 
 from urllib.parse import quote
 
-import pytest
-
-from tests.integration.api.helpers import VALID_EVENT, AUTH, app_client
+from tests.integration.api.helpers import AUTH, VALID_EVENT, app_client
 
 
 async def test_valid_event_gets_201_with_location_and_the_seven_fields(

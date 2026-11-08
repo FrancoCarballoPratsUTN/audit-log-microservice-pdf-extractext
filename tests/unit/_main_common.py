@@ -4,12 +4,7 @@ Fixtures y constantes compartidas por los tres módulos de test. No se recolecta
 como test por empezar con guion bajo.
 """
 
-import logging
-import signal
-from pathlib import Path
-
 import pytest
-from pydantic import ValidationError
 
 from app.config import Settings
 

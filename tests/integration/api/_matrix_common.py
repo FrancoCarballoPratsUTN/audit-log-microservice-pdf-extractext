@@ -8,8 +8,8 @@ from bson import ObjectId
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from tests.integration.conftest import COLLECTION_NAME, TEST_TOKEN
 from tests.integration.api.helpers import AUTH, VALID_EVENT
+from tests.integration.conftest import COLLECTION_NAME
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 REQUIRED_PROBLEM_MEMBERS = {"type", "title", "status", "detail"}
@@ -98,11 +98,17 @@ ROWS = [
     Row("NOT_FOUND", 404, "/audit/logs/checksum/", _get_checksum_without_value),
     Row("METHOD_NOT_ALLOWED", 405, "/audit/logs", _put_audit_logs),
     Row(
-        "AUDIT_STORAGE_ERROR", 503, "/audit/logs", _post_valid,
+        "AUDIT_STORAGE_ERROR",
+        503,
+        "/audit/logs",
+        _post_valid,
         arrange=reject_every_write,
     ),
     Row(
-        "INTERNAL_ERROR", 500, "/audit/logs", _get_audit_logs,
+        "INTERNAL_ERROR",
+        500,
+        "/audit/logs",
+        _get_audit_logs,
         arrange=seed_a_corrupt_document,
     ),
 ]

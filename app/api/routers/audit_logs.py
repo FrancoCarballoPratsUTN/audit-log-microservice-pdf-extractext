@@ -1,4 +1,5 @@
 """Endpoints de `/audit/logs`."""
+
 from fastapi import APIRouter, Depends, Request, Security, status
 from fastapi.responses import JSONResponse
 

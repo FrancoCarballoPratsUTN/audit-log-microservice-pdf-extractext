@@ -1,8 +1,7 @@
 """Matriz de errores: cada fila de SPEC §7.2 con su status y code exactos."""
 
-from fastapi.testclient import TestClient
-
 import pytest
+from fastapi.testclient import TestClient
 
 from tests.integration.api._matrix_common import (
     PROBLEM_MEDIA_TYPE,

@@ -3,16 +3,14 @@
 El orden se resuelve en un único sitio: `install_middleware`.
 """
 
-from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
 from app.api.auth import BearerAuthMiddleware
-from app.config import Settings
 from app.api.middleware.access_log import AccessLogMiddleware
 from app.api.middleware.body_size import BodySizeLimitMiddleware
 from app.api.middleware.content_type import ContentTypeMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
-from starlette.middleware.cors import CORSMiddleware
-
+from app.config import Settings
 from tests.unit.api._middleware_common import build_app, create_app
 
 EXPECTED_ORDER = [

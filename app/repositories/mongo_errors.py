@@ -1,7 +1,8 @@
 """Traducción de excepciones de PyMongo a errores de dominio."""
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from bson.errors import BSONError
 from pymongo.errors import DocumentTooLarge, DuplicateKeyError, PyMongoError

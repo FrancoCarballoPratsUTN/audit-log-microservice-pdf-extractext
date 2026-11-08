@@ -4,8 +4,8 @@ import pytest
 
 from tests.unit._errors_common import (
     MATRIX_IDS,
-    ServiceError,
     SPEC_ERROR_MATRIX,
+    ServiceError,
 )
 
 

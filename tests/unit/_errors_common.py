@@ -1,6 +1,5 @@
-"""Infraestructura compartida para los tests de errores (divididos de test_errors.py)."""
+"""Infraestructura compartida de tests de errores."""
 
-import ast
 from pathlib import Path
 
 from app.errors import (

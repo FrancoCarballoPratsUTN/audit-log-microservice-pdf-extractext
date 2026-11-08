@@ -18,7 +18,10 @@ from app.api.exception_handlers import register_exception_handlers
 from app.api.middleware import install_middleware
 from app.api.routers.audit_logs import router as audit_logs_router
 from app.api.routers.health import router as health_router
-from app.bootstrap.consul import consul_registration, settings_from_environment_or_consul
+from app.bootstrap.consul import (
+    consul_registration,
+    settings_from_environment_or_consul,
+)
 from app.bootstrap.logging import configure_logging
 from app.config import Settings
 from app.consul_agent import deregister_service, register_service
@@ -38,9 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mongo_client = client
 
     collection = audit_logs_collection(client, settings)
-    app.state.audit_log_service = AuditLogService(
-        MongoAuditLogRepository(collection)
-    )
+    app.state.audit_log_service = AuditLogService(MongoAuditLogRepository(collection))
     app.state.readiness_probe = ReadinessProbe(
         client, collection, retention_days=settings.retention_days
     )

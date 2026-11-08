@@ -2,8 +2,8 @@
 
 import logging
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from tests.unit.api._middleware_common import AUTH, build_app
 

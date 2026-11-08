@@ -1,19 +1,18 @@
 """Rechazar con `413` un cuerpo sin tamaño declarado o por encima del límite.
 
-El microservicio tiene un límite de tamaño para las solicitudes. 
-Antes de procesar los datos, revisa la cabecera Content-Length para saber cuánto 
-ocupa el contenido. Si supera el límite permitido, rechaza la solicitud sin necesidad 
-de cargar todo el contenido en memoria. Esto ayuda a proteger los recursos del sistema"
+El microservicio tiene un límite de tamaño para las solicitudes.
+Antes de procesar los datos, revisa la cabecera Content-Length para saber cuánto
+ocupa el contenido. Si supera el límite permitido, rechaza la solicitud sin
+necesidad de cargar todo el contenido en memoria. Esto ayuda a proteger los
+recursos del sistema.
 """
 
 from pathlib import Path
 
 import pytest
-
 from fastapi.testclient import TestClient
 
 from app.api.middleware.body_size import parse_content_length
-
 from tests.unit.api._middleware_common import AUTH, JSON, LIMIT, build_app
 
 MIDDLEWARE_SOURCE = (
@@ -81,10 +80,10 @@ def test_content_length_is_parsed_defensively(value: str | None, expected: int) 
 
 
 def test_the_body_limit_never_reads_the_body() -> None:
-    """Esta prueba revisa directamente el código fuente del middleware. 
+    """Esta prueba revisa directamente el código fuente del middleware.
     Busca que no se utilicen métodos para leer el body, como .body()
     Esto permite comprobar que el límite de tamaño se controle sin cargar
-     el contenido de la solicitud en memoria."""
+    el contenido de la solicitud en memoria."""
     source = MIDDLEWARE_SOURCE.read_text(encoding="utf-8")
 
     for reader in (".body(", ".stream(", "request.json", "request.data", ".form("):

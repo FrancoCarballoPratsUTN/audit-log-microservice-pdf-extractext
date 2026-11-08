@@ -3,12 +3,11 @@
 import pytest
 
 from tests.unit._errors_common import (
-    AuditStorageError,
-    ServiceError,
     SPEC_ERROR_MATRIX,
-    UnauthorizedError,
-    ValidationError,
+    AuditStorageError,
     NotFoundError,
+    ServiceError,
+    ValidationError,
 )
 
 
@@ -53,8 +52,8 @@ def test_service_error_is_catchable_as_a_plain_exception() -> None:
 def test_errors_module_does_not_import_the_web_framework() -> None:
     """`errors.py` es dominio puro: la Capa 3 lo lanza y la Capa 1 lo traduce.
     Un import de FastAPI aquí invertiría la dirección de la dependencia."""
-    from pathlib import Path
     import ast
+    from pathlib import Path
 
     source = Path(__file__).resolve().parents[2] / "app" / "errors.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))

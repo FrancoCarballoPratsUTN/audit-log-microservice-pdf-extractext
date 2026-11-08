@@ -1,6 +1,8 @@
 """Ninguna ruta responde 422: todo JSON inválido es 400 (SPEC §3.3 D1, §2.6)."""
 
-from tests.integration.api.helpers import app_client, AUTH, VALID_EVENT
+from fastapi.testclient import TestClient
+
+from tests.integration.api.helpers import AUTH, VALID_EVENT
 
 
 def test_no_route_ever_answers_422(deployed: None, app_client: TestClient) -> None:

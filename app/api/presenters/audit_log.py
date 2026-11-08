@@ -1,8 +1,9 @@
 """Construcción de respuestas de escritura para `/audit/logs`."""
 
+from urllib.parse import quote
+
 from fastapi import status
 from fastapi.responses import JSONResponse
-from urllib.parse import quote
 
 from app.api.schemas import AuditLogResponse
 from app.services.audit_log_service import CreateResult

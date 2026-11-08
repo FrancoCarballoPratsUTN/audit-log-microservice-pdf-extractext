@@ -19,11 +19,19 @@ from pymongo.errors import PyMongoError
 from app.config import Settings
 from app.errors import AuditStorageError
 from app.repositories.index_specs import (
-    CHECKSUM_LOOKUP_INDEX,
-    GLOBAL_LOOKUP_INDEX,
-    UNIQUE_IDEMPOTENCY_INDEX,
-    index_specs,
-    ttl_index,
+    CHECKSUM_LOOKUP_INDEX as CHECKSUM_LOOKUP_INDEX,
+)
+from app.repositories.index_specs import (
+    GLOBAL_LOOKUP_INDEX as GLOBAL_LOOKUP_INDEX,
+)
+from app.repositories.index_specs import (
+    UNIQUE_IDEMPOTENCY_INDEX as UNIQUE_IDEMPOTENCY_INDEX,
+)
+from app.repositories.index_specs import (
+    index_specs as index_specs,
+)
+from app.repositories.index_specs import (
+    ttl_index as ttl_index,
 )
 
 logger = logging.getLogger(__name__)

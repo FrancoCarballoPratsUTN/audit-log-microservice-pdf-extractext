@@ -1,10 +1,9 @@
 """Exigir `application/json` en el `POST` → `415`."""
 
 import pytest
-
 from fastapi.testclient import TestClient
 
-from tests.unit.api._middleware_common import AUTH, JSON, LIMIT, build_app
+from tests.unit.api._middleware_common import AUTH, LIMIT, build_app
 
 
 def build_client() -> TestClient:

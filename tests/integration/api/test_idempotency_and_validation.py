@@ -2,7 +2,12 @@
 
 import pytest
 
-from tests.integration.api.helpers import VALID_EVENT, AUTH, app_client
+from tests.integration.api.helpers import (
+    AUTH,
+    RAW_EVENT_PREFIX,
+    VALID_EVENT,
+    app_client,
+)
 
 
 async def test_an_identical_event_is_a_replay_and_leaves_one_document(

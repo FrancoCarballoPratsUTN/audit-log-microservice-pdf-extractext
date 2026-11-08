@@ -3,8 +3,8 @@
 import logging
 import uuid
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from tests.unit.api._middleware_common import AUTH, build_app
 
@@ -39,7 +39,9 @@ def test_an_invalid_request_id_is_regenerated(value: str) -> None:
     assert uuid.UUID(response.headers["x-request-id"])
 
 
-def test_newlines_in_a_request_id_do_not_reach_the_log(caplog: pytest.LogCaptureFixture) -> None:
+def test_newlines_in_a_request_id_do_not_reach_the_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     client = build_client()
     with caplog.at_level(logging.INFO, logger="app.api.middleware"):
         response = client.get("/health", headers={"X-Request-ID": "trace\nINJECTED"})

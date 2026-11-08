@@ -1,9 +1,8 @@
 """Checksum opaco y normalización de `details`."""
 
 from tests.integration.api.helpers import (
-    RAW_EVENT_PREFIX,
-    VALID_EVENT,
     AUTH,
+    VALID_EVENT,
     app_client,
 )
 

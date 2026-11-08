@@ -40,7 +40,7 @@ def validate_details(details: Any, max_bytes: int) -> None:
         validate_bson_nesting(details)
         encoded = json_details(details)
         BSON.encode({"details": details})
-    except (BSONError, OverflowError, RecursionError, TypeError, ValueError):
+    except BSONError, OverflowError, RecursionError, TypeError, ValueError:
         raise ValidationError(
             "The 'details' field is not valid JSON/BSON data."
         ) from None

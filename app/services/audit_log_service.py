@@ -48,12 +48,12 @@ class AuditLogService:
             AuditStorageError: Si el índice único rechazó la identidad pero la
                 relectura no encuentra el registro ganador.
         """
-        identity = dict(
-            action=request.action,
-            entity_type=request.entity_type,
-            checksum=request.checksum,
-            performed_at=request.performed_at,
-        )
+        identity = {
+            "action": request.action,
+            "entity_type": request.entity_type,
+            "checksum": request.checksum,
+            "performed_at": request.performed_at,
+        }
         existing = await self._repository.find_replay(**identity)
         if existing is not None:
             return CreateResult(existing, replay=True)

@@ -12,8 +12,7 @@ from app.api.auth import BearerAuthMiddleware
 from app.config import Settings
 from app.errors import ServiceError
 from app.main import create_app
-
-from tests.unit._main_common import TOKEN, clean_environment, configured
+from tests.unit._main_common import TOKEN  # noqa: F401
 
 
 def test_app_main_imports_without_any_environment() -> None:
@@ -109,5 +108,6 @@ def test_create_app_does_not_install_process_signal_handlers(
 ) -> None:
     def fail_if_installed(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("create_app must not install signal handlers")
+
     monkeypatch.setattr(signal, "signal", fail_if_installed)
     create_app()

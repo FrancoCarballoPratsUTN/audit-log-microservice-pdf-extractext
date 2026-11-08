@@ -1,11 +1,9 @@
 """Metadatos de cable de cada error: status, code, type_uri, title, headers."""
 
-import pytest
-
 from tests.unit._errors_common import (
+    ServiceError,
     UnauthorizedError,
     ValidationError,
-    ServiceError,
 )
 
 
