@@ -417,9 +417,9 @@
   - [x] `bootstrap/consul.py` ≤ 70 líneas (58)
   - [x] `bootstrap/logging.py` ≤ 20 líneas (16)
 
-- [ ] **T34: Dividir mongodb.py en index_specs + client**
-  - [ ] `mongodb.py` ≤ 100 líneas
-  - [ ] `index_specs.py` ≤ 80 líneas
+- [x] **T34: Dividir mongodb.py en index_specs + client**
+  - [x] `mongodb.py` ≤ 100 líneas (96)
+  - [x] `index_specs.py` ≤ 80 líneas (71)
 
 - [ ] **T35: Comprimir errors.py con factory de errores**
   - [ ] `errors.py` ≤ 100 líneas
