@@ -396,16 +396,16 @@
 
 ### Fase 9.1 — Producción: archivos > 100 líneas y DRY crítico
 
-- [ ] **T30: Extraer traductor de errores de PyMongo del repositorio**
-  - [ ] `mongo_audit_log_repository.py` ≤ 100 líneas
-  - [ ] `mongo_errors.py` nuevo, ≤ 60 líneas, con decorador `translate_pymongo_errors`
-  - [ ] Comportamientos de error (replay, 413, 400, 503) preservados
+- [x] **T30: Extraer traductor de errores de PyMongo del repositorio**
+  - [x] `mongo_audit_log_repository.py` ≤ 100 líneas
+  - [x] `mongo_errors.py` nuevo, ≤ 60 líneas, con decorador `translate_pymongo_errors`
+  - [x] Comportamientos de error (replay, 413, 400, 503) preservados
 
-- [ ] **T31: Dividir el router de auditoría en 3 responsabilidades**
-  - [ ] `audit_logs.py` ≤ 100 líneas (solo rutas + Depends + response_model)
-  - [ ] `validators/details.py` ≤ 60 líneas
-  - [ ] `presenters/audit_log.py` ≤ 60 líneas
-  - [ ] El router deja de importar `bson`
+- [x] **T31: Dividir el router de auditoría en 3 responsabilidades**
+  - [x] `audit_logs.py` ≤ 100 líneas (solo rutas + Depends + response_model)
+  - [x] `validators/details.py` ≤ 60 líneas
+  - [x] `presenters/audit_log.py` ≤ 60 líneas
+  - [x] El router deja de importar `bson`
 
 - [ ] **T32: Dividir middleware.py en un archivo por middleware**
   - [ ] Cada archivo nuevo ≤ 50 líneas

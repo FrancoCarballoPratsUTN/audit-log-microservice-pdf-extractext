@@ -178,7 +178,7 @@ def test_a_recursion_error_while_serializing_details_is_400(
             raise RecursionError("maximum recursion depth exceeded")
         return real_dumps(value, *args, **kwargs)
 
-    monkeypatch.setattr("app.api.routers.audit_logs.json.dumps", dumps)
+    monkeypatch.setattr("app.api.validators.details.json.dumps", dumps)
 
     response = _post(service, {**VALID_EVENT, "details": {"trigger": "recursion"}})
 
