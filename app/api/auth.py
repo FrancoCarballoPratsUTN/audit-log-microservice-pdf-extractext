@@ -6,11 +6,13 @@ propósito: distinguirlos le daría a un atacante un oráculo para adivinar
 credenciales (SPEC §4.2).
 
 Es una preocupación de transporte, así que vive entera en la Capa 1.
-`AuditLogService` nunca llega a saber que existe un token.
+`AuditLogService` nunca llega a saber que existe un token. La autenticación se
+ejecuta antes del enrutado: un sondeo sin credenciales recibe `401` también
+para un path que no existe, de modo que la superficie de la API no se puede
+mapear desde fuera.
 
-La autenticación se ejecuta antes del enrutado: un sondeo sin credenciales
-recibe `401` también para un path que no existe, de modo que la superficie de la
-API no se puede mapear desde fuera.
+`auto_error=False` para que este dependency no emita un `403` propio que
+duplicara —y contradijera— el `401` del middleware (SPEC §4.2).
 """
 
 import logging
@@ -27,15 +29,11 @@ from app.errors import UnauthorizedError
 logger = logging.getLogger(__name__)
 
 SCHEME = "Bearer"
-# documentación: no exponen datos de auditoría.
-PUBLIC_PATHS = frozenset({"/health", "/readyz", "/docs", "/openapi.json"})
-
-# Sólo documentación: el candado `Bearer` que /docs necesita para enviar el token
-# y el esquema de seguridad que `/openapi.json` publica. La autorización real la
-# hace `BearerAuthMiddleware` antes del enrutado; `auto_error=False` para que este
-# dependency no emita un `403` propio que duplicaría —y contradiría— el `401` del
-# middleware (SPEC §4.2).
+# Documentación: el candado `Bearer` que /docs necesita para enviar el token y
+# el esquema de seguridad que `/openapi.json` publica.
 bearer_scheme = HTTPBearer(auto_error=False, scheme_name=SCHEME)
+
+PUBLIC_PATHS = frozenset({"/health", "/readyz", "/docs", "/openapi.json"})
 
 REASON_MISSING = "missing header"
 REASON_EMPTY = "empty credential"
@@ -44,15 +42,7 @@ REASON_MISMATCH = "credential does not match"
 
 
 def extract_bearer(authorization: str | None) -> tuple[str | None, str]:
-    """Separar la cabecera `Authorization` en credencial y motivo de rechazo.
-
-    Args:
-        authorization: Valor crudo de la cabecera.
-
-    Returns:
-        La credencial, o `None` si la cabecera no es utilizable, más el motivo
-        del rechazo, que va al log y nunca al cliente.
-    """
+    """Separar la cabecera `Authorization` en credencial y motivo de rechazo."""
     if authorization is None:
         return None, REASON_MISSING
 
@@ -68,12 +58,7 @@ def extract_bearer(authorization: str | None) -> tuple[str | None, str]:
 def is_authorized(authorization: str | None, token: str) -> bool:
     """Decidir si una petición puede continuar.
 
-    Args:
-        authorization: Valor crudo de la cabecera `Authorization`.
-        token: La credencial esperada.
-
-    Returns:
-        True sólo si el esquema es `Bearer` y la credencial coincide.
+    Returns `True` sólo si el esquema es `Bearer` y la credencial coincide.
     """
     credential, reason = extract_bearer(authorization)
     if credential is None:
@@ -93,8 +78,8 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Rechazar toda petición que no lleve la credencial compartida.
 
     La credencial se lee de `app.state.api_token`, donde el composition root la
-    dejó una vez al arrancar. El middleware queda sin estado: no hay subclase por
-    app ni token capturado en un closure.
+    dejó una vez al arrancar. El middleware queda sin estado: no hay subclase
+    por app ni token capturado en un closure.
     """
 
     async def dispatch(

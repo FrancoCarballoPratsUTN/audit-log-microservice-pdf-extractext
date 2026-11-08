@@ -436,11 +436,11 @@
   - [x] `domain/models.py` ≤ 100 líneas (78)
   - [x] Normalización (UTC, ms, `None → {}`) conservada
 
-- [ ] **T39: Comprimir auth.py, schemas.py, exception_handlers.py**
-  - [ ] `auth.py` ≤ 100 líneas
-  - [ ] `schemas.py` ≤ 100 líneas
-  - [ ] `exception_handlers.py` ≤ 100 líneas
-  - [ ] Sigue sin emitir `422`
+- [x] **T39: Comprimir auth.py, schemas.py, exception_handlers.py**
+  - [x] `auth.py` ≤ 100 líneas (96)
+  - [x] `schemas.py` ≤ 100 líneas (81)
+  - [x] `exception_handlers.py` ≤ 100 líneas (100)
+  - [x] Sigue sin emitir `422`
 
 ### Fase 9.2 — Tests: archivos > 100 líneas
 

@@ -1,19 +1,18 @@
 """Exception handlers: donde un fallo se convierte en una respuesta HTTP.
 
-La Capa 1 es la única que puede saber de códigos de estado, y este módulo es
-donde vive ese conocimiento. Tres responsabilidades, por orden de importancia:
+La Capa 1 es la única que puede saber de códigos de estado. Tres
+responsabilidades:
 
-1. `RequestValidationError` se convierte en `400 VALIDATION_ERROR`. El `422` de
-   FastAPI no satisface al cliente de Go: `ParseProblem` rellena un `Problem{}`
-   con todos sus miembros a cero, el orquestador llama a `WriteHeader(0)` y su
-   servidor HTTP hace panic (SPEC §2.6). Ningún camino de este módulo emite `422`.
+1. `RequestValidationError` se convierte en `400 VALIDATION_ERROR`. Ningún
+   camino de este módulo emite `422`: el cliente de Go loparsearía como un
+   `Problem{}` vacío y haría panic (SPEC §2.6).
 2. `ServiceError` conserva el estado, las cabeceras y el código que declara.
 3. Cualquier otra cosa se convierte en `500` sin detalle: una excepción no
    prevista que llega al cliente como texto es una fuga.
 
-`StarletteHTTPException` no necesita que se inspeccione su causa: el enrutado
-responde 404 y 405, y `str(exc)` es la frase del propio framework sobre la
-petición, así que el cliente sigue aprendiendo qué estaba mal en *su* llamada.
+`StarletteHTTPException` no necesita inspección de causa: el enrutado responde
+404 y 405, y `str(exc)` es la frase del framework sobre la petición del
+cliente.
 """
 
 import logging
@@ -45,8 +44,8 @@ def _describe(exc: PydanticValidationError) -> str:
     """Una frase que nombra qué falló, y nada sobre el valor enviado.
 
     Pydantic reporta la entrada problemática en `input` e internos del validador
-    en `ctx` y `url`; los tres se descartan, porque el valor puede ser un secreto
-    y el resto apunta dentro de la pila de validación (SPEC §7.1).
+    en `ctx` y `url`; se descartan, porque el valor puede ser un secreto y el
+    resto apunta dentro de la pila de validación (SPEC §7.1).
     """
     failures = [
         f"{'.'.join(str(part) for part in failure['loc'])}: {failure['msg']}"
@@ -73,9 +72,8 @@ async def http_exception_handler(
 ) -> JSONResponse:
     """Traducir los 404 y 405 del propio framework a la matriz de errores.
 
-    Cualquier otro estado se convierte en un 500 genérico a propósito: la matriz
-    de SPEC §7.2 tiene ocho filas, e inventar un noveno código aquí haría
-    divergir el contrato.
+    Cualquier otro estado se convierte en un 500 genérico: la matriz de SPEC
+    §7.2 tiene ocho filas, e inventar un noveno código divergiría el contrato.
     """
     error_class = HTTP_ERRORS.get(exc.status_code)
     if error_class is None:
@@ -83,7 +81,6 @@ async def http_exception_handler(
             "excepción HTTP inesperada %s en %s", exc.status_code, request.url.path
         )
         return problem_response(InternalError(), instance=request.url.path)
-
     return problem_response(error_class(str(exc.detail)), instance=request.url.path)
 
 

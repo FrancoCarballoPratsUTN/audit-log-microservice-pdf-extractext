@@ -1,14 +1,12 @@
 """Esquemas de petición y respuesta del contrato de auditoría.
 
-`_id` necesita `serialization_alias`: FastAPI serializa con `by_alias=True`, así
-que sin el alias el JSON sale con `id`, el `models.AuditLog.ID string` de Go se
-queda vacío y el orquestador ve un log de auditoría sin identidad y sin error
-(SPEC §2.5 H3). `tests/unit/api/test_schemas.py` falla si el alias desaparece.
+`_id` necesita `serialization_alias`: FastAPI serializa con `by_alias=True`,
+así que sin el alias el JSON sale con `id`, el `models.AuditLog.ID string` de
+Go se queda vacío y el orquestador ve un log sin identidad (SPEC §2.5 H3).
 
-`performed_at` y `received_at` son `str` a propósito. RFC 3339 con `Z` y
-milisegundos no es lo que Pydantic emite para un `datetime`, y el formato tiene
-que llegar a Go byte a byte; lo aporta `app/domain.models.to_wire_fields`,
-compartido por escritura y lectura.
+`performed_at` y `received_at` son `str` a propósito: RFC 3339 con `Z` y
+milisegundos no es lo que Pydantic emite para un `datetime`, y el formato
+tiene que llegar a Go byte a byte; lo aporta `app/domain.models.to_wire_fields`.
 """
 
 from typing import Any
@@ -19,12 +17,12 @@ from app.domain.models import AuditLog, to_wire_fields
 
 
 class AuditEventRequest(BaseModel):
-    """Un evento de auditoría tal como lo emite el orquestador (`models.AuditEvent`).
+    """Un evento de auditoría tal como lo emite el orquestador.
 
     `extra="forbid"`: una clave desconocida de primer nivel se convierte en un
-    `400` visible en vez de un `201` que descarta datos en silencio (SPEC §3.4).
-    `details: Any` es la válvula de escape para todo lo que no se merece ni
-    columna ni índice.
+    `400` visible en vez de un `201` que descarta datos en silencio
+    (SPEC §3.4). `details: Any` es la válvula de escape para lo que no
+    merece columna ni índice.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -38,10 +36,10 @@ class AuditEventRequest(BaseModel):
 
 class AuditLogItem(BaseModel):
     """Un evento almacenado con exactamente los 7 campos de `models.AuditLog`
-    (SPEC §2.4) — lo que decodifican los dos `GET` del cliente Go.
+    (SPEC §2.4), lo que decodifican los dos `GET` del cliente Go.
 
-    Sin `idempotent_replay`: ese campo sólo existe en la respuesta de escritura
-    y nunca se persiste, y los listados no son respuestas a una escritura.
+    Sin `idempotent_replay`: ese campo sólo existe en la respuesta de
+    escritura y nunca se persiste.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -56,41 +54,19 @@ class AuditLogItem(BaseModel):
 
     @classmethod
     def from_log(cls, log: AuditLog) -> AuditLogItem:
-        """Construir el elemento desde el registro de dominio.
-
-        Args:
-            log: El registro leído de Capa 3.
-
-        Returns:
-            El cuerpo a serializar con `_id` y fechas UTC.
-        """
+        """Construir el elemento desde el registro de dominio."""
         return cls(**to_wire_fields(log))
 
 
 class AuditLogResponse(AuditLogItem):
-    """Un evento de auditoría almacenado, con la forma que espera `models.AuditLog`
-    en el orquestador.
-
-    `idempotent_replay` existe sólo en esta respuesta: nunca se persiste.
-    """
+    """Un evento de auditoría almacenado con la forma que espera el
+    orquestador. `idempotent_replay` existe sólo en esta respuesta."""
 
     idempotent_replay: bool = False
 
     @classmethod
     def from_log(cls, log: AuditLog, *, replay: bool = False) -> AuditLogResponse:
-        """Construir la respuesta desde el registro de dominio.
-
-        Comparte con la lectura `to_wire_fields`, el único formateador de los
-        siete campos del contrato.
-
-        Args:
-            log: El registro persistido, o el de un replay.
-            replay: Si esta respuesta informa de una repetición idempotente.
-                Es un campo de la respuesta, nunca se persiste.
-
-        Returns:
-            El cuerpo a serializar con `_id`, fechas UTC y el flag de replay.
-        """
+        """Construir la respuesta desde el registro de dominio."""
         return cls(**to_wire_fields(log), idempotent_replay=replay)
 
 
