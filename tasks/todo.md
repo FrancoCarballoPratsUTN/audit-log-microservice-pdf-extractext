@@ -422,15 +422,15 @@
   - [x] `index_specs.py` ≤ 80 líneas (71)
 
 - [x] **T35: Comprimir errors.py con factory de errores**
-  - [x] `errors.py` ≤ 100 líneas (97)
+  - [x] `errors.py` ≤ 100 líneas
   - [x] Matriz de 8 errores preservada intacta
 
 - [x] **T36: Eliminar get_settings_from_values duplicado en config.py**
-  - [x] `config.py` ≤ 100 líneas (84)
+  - [x] `config.py` ≤ 100 líneas
   - [x] `get_settings_from_values` eliminado; `main.py` usa `get_settings`
 
-- [ ] **T37: Inline _find_existing en audit_log_service.py**
-  - [ ] `audit_log_service.py` ≤ 100 líneas
+- [x] **T37: Inline _find_existing en audit_log_service.py**
+  - [x] `audit_log_service.py` ≤ 100 líneas (61)
 
 - [ ] **T38: Extraer _normalize_domain_instance en domain/models.py**
   - [ ] `domain/models.py` ≤ 100 líneas
@@ -450,7 +450,7 @@
 
 - [ ] **T41: Dividir test_main.py (361 líneas) en 3 archivos**
   - [ ] Cada archivo ≤ 60 líneas
-  - [ ] Comportamiento idéntico al original
+  - [ ] Comportamiento idéntico al original 
 
 - [ ] **T42: Dividir test_create_audit_log.py (246 líneas) en 3 archivos + helpers**
   - [ ] `helpers.py` con `VALID_EVENT`, `AUTH`, `app_client()`
