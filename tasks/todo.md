@@ -407,15 +407,15 @@
   - [x] `presenters/audit_log.py` ≤ 60 líneas
   - [x] El router deja de importar `bson`
 
-- [ ] **T32: Dividir middleware.py en un archivo por middleware**
-  - [ ] Cada archivo nuevo ≤ 50 líneas
-  - [ ] `install.py` ≤ 60 líneas
-  - [ ] Orden `401 → 415 → 413 → 400` mantenido
+- [x] **T32: Dividir middleware.py en un archivo por middleware**
+  - [x] Cada archivo nuevo ≤ 50 líneas
+  - [x] `install.py` ≤ 60 líneas
+  - [x] Orden `401 → 415 → 413 → 400` mantenido
 
-- [ ] **T33: Dividir main.py en composition root + bootstrap de Consul + logging**
-  - [ ] `main.py` ≤ 100 líneas
-  - [ ] `bootstrap/consul.py` ≤ 70 líneas
-  - [ ] `bootstrap/logging.py` ≤ 20 líneas
+- [x] **T33: Dividir main.py en composition root + bootstrap de Consul + logging**
+  - [x] `main.py` ≤ 100 líneas (96)
+  - [x] `bootstrap/consul.py` ≤ 70 líneas (58)
+  - [x] `bootstrap/logging.py` ≤ 20 líneas (16)
 
 - [ ] **T34: Dividir mongodb.py en index_specs + client**
   - [ ] `mongodb.py` ≤ 100 líneas

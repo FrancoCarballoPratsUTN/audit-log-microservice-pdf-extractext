@@ -26,14 +26,13 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.api.auth import BearerAuthMiddleware
+from app.bootstrap.consul import (
+    consul_registration as _consul_registration,
+    settings_from_environment_or_consul as _settings_from_environment_or_consul,
+)
 from app.config import Settings
 from app.errors import ServiceError
-from app.main import (
-    _consul_registration,
-    _settings_from_environment_or_consul,
-    create_app,
-    lifespan,
-)
+from app.main import create_app, lifespan
 from tests.fakes.fake_mongo import WorkingClient, WorkingCollection
 
 TOKEN = "s3cr3t-shared-token"
@@ -204,7 +203,7 @@ async def test_shutdown_deregisters_consul_and_closes_the_client_once(
         raise AssertionError("the lifespan must not install signal handlers")
 
     monkeypatch.setattr(
-        "app.main._consul_registration",
+        "app.main.consul_registration",
         lambda: {
             "address": "http://consul:8500",
             "token": "consul-token",
@@ -249,7 +248,7 @@ def test_consul_configuration_is_loaded_when_enabled(
     monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")
     monkeypatch.setenv("CONSUL_KV_PREFIX", "app/auditlog")
     monkeypatch.setattr(
-        "app.main.load_prefix",
+        "app.bootstrap.consul.load_prefix",
         lambda *_args, **_kwargs: {"SERVICE_API_TOKEN": TOKEN},
     )
 
@@ -304,7 +303,7 @@ async def test_deregistration_failure_is_logged_and_shutdown_continues(
         return None
 
     monkeypatch.setattr(
-        "app.main._consul_registration",
+        "app.main.consul_registration",
         lambda: {
             "address": "http://consul:8500",
             "token": "consul-token",
