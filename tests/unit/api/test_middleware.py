@@ -151,6 +151,32 @@ def test_body_size_is_checked_before_validation(client: TestClient) -> None:
     assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
 
 
+def test_a_post_without_content_length_is_a_413(client: TestClient) -> None:
+    request = client.build_request(
+        "POST",
+        "/audit/logs",
+        headers={**AUTH, **JSON},
+        content=b'{"action":"pdf.extract"}',
+    )
+    del request.headers["content-length"]
+
+    response = client.send(request)
+
+    assert response.status_code == 413
+    assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
+
+
+def test_a_chunked_post_is_a_413(client: TestClient) -> None:
+    response = client.post(
+        "/audit/logs",
+        headers={**AUTH, **JSON},
+        content=iter([b'{"action":"pdf.extract"}']),
+    )
+
+    assert response.status_code == 413
+    assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
+
+
 def test_validation_is_the_last_gate(client: TestClient) -> None:
     """Con token, `application/json` y body pequeño, el fallo que queda es el de
     estructura: `400`, nunca el `422` de FastAPI (SPEC §3.3 D1)."""

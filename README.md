@@ -85,6 +85,12 @@ El despliegue debe limitar la tasa de respuestas `401` en Traefik (middleware
 `rateLimit` sobre el router de AUDA) como mitigación de floods de credenciales
 inválidas.
 
+El límite de body exige `Content-Length`. Un `POST` sin esa cabecera —por
+ejemplo, `Transfer-Encoding: chunked` o HTTP/2 sin longitud— se rechaza con
+`413` antes de leer el cuerpo. Los clientes deben declarar `Content-Length`;
+Traefik aplica además `buffering.maxRequestBodyBytes` con el mismo
+`MAX_BODY_BYTES`.
+
 ## Pruebas de stress (Vegeta + k6)
 
 Plan y checklist: [`tasks/stress-plan.md`](./tasks/stress-plan.md) y

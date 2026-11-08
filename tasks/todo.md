@@ -294,12 +294,12 @@
   - [x] Un ID inválido, vacío o demasiado largo se reemplaza por un UUID
   - [x] Los logs no pueden ser inyectados con saltos de línea desde esa cabecera
 
-- [ ] **T26: Cerrar bypass del límite de body** · H-10
-  - [ ] Un `POST` sin `Content-Length` no llega a Pydantic y devuelve `413`
-  - [ ] Un `POST` con `Transfer-Encoding: chunked` no se lee sin límite
-  - [ ] Un body dentro del límite sigue funcionando
-  - [ ] La configuración de Traefik incluye `buffering.maxRequestBodyBytes`
-  - [ ] La documentación explica el comportamiento para clientes chunked/HTTP/2 sin longitud
+- [x] **T26: Cerrar bypass del límite de body** · H-10
+  - [x] Un `POST` sin `Content-Length` no llega a Pydantic y devuelve `413`
+  - [x] Un `POST` con `Transfer-Encoding: chunked` no se lee sin límite
+  - [x] Un body dentro del límite sigue funcionando
+  - [x] La configuración de Traefik incluye `buffering.maxRequestBodyBytes`
+  - [x] La documentación explica el comportamiento para clientes chunked/HTTP/2 sin longitud
 
 - [ ] **T27: Access log único y documentación usable** · H-14
   - [ ] Cada petición produce una sola línea de access log

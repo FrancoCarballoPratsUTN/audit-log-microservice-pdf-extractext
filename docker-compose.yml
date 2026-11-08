@@ -37,6 +37,8 @@ services:
       - traefik.http.routers.audit.rule=Host(`audit.universidad.localhost`)
       - traefik.http.routers.audit.entrypoints=https
       - traefik.http.routers.audit.tls=true
+      - traefik.http.routers.audit.middlewares=audit-buffering@docker
+      - traefik.http.middlewares.audit-buffering.buffering.maxRequestBodyBytes=${MAX_BODY_BYTES:-1048576}
       - traefik.http.services.audit.loadbalancer.server.port=8000
       - traefik.docker.network=mired
     networks:

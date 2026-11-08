@@ -122,7 +122,7 @@ class ContentTypeMiddleware(BaseHTTPMiddleware):
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Rechazar con `413` un cuerpo cuya `Content-Length` supere el límite.
+    """Rechazar con `413` un cuerpo sin tamaño declarado o por encima del límite.
 
     Decide **sólo** con la cabecera: no lee el cuerpo, así que una subida enorme
     se rechaza antes de entrar en memoria (AC de T14). Es el mismo principio del
@@ -142,9 +142,11 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Responder `413` si la `Content-Length` declarada excede el límite."""
-        if parse_content_length(request.headers.get(CONTENT_LENGTH_HEADER)) > (
-            self._max_bytes
+        """Responder `413` si un `POST` no declara tamaño o excede el límite."""
+        content_length = request.headers.get(CONTENT_LENGTH_HEADER)
+        if request.method == "POST" and (
+            content_length is None
+            or parse_content_length(content_length) > self._max_bytes
         ):
             return problem_response(PayloadTooLargeError(), instance=request.url.path)
         return await call_next(request)
