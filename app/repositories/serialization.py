@@ -1,14 +1,8 @@
-"""Mapeo BSON ⇄ dominio ⇄ dict de la API.
+"""Mapeo BSON ⇄ dominio.
 
-SPEC §6.2 y §2.4: un documento de Mongo no es un JSON de la API. Este módulo
-es el único lugar donde se cruzan esos dos mundos — `ObjectId` → hex de 24
-caracteres, fechas → RFC 3339 UTC con `Z` —, porque si cada endpoint
-serializara por su cuenta acabarían conviviendo formatos distintos que el
-orquestador acepta a ratos.
-
-También construye el documento de escritura (`to_document`): el único que debe
-saber que el `_id` lo genera Mongo y que `details` nunca se guarda como
-`null`.
+`to_document` construye el documento de escritura y `to_audit_log` lo convierte
+de vuelta al dominio. El formato de los siete campos del cable vive en
+`app.domain.models.to_wire_fields`.
 """
 
 from collections.abc import Mapping
@@ -17,7 +11,7 @@ from typing import Any
 
 from bson import ObjectId
 
-from app.domain.models import AuditLog, CreateAuditLogRequest, rfc3339_utc
+from app.domain.models import AuditLog, CreateAuditLogRequest
 
 
 def to_document(
@@ -69,23 +63,4 @@ def to_audit_log(document: Mapping[str, Any]) -> AuditLog:
     )
 
 
-def render(log: AuditLog) -> dict[str, Any]:
-    """Los siete campos de `models.AuditLog` con el formato de SPEC §2.4.
-
-    `_id` sale como string plano (el orquestador espera un `string`, no un
-    subdocumento `{"$oid": ...}`) y las fechas como RFC 3339 UTC con `Z` y
-    milisegundos, que es lo que parsea `time.Time`. El dominio ya las truncó a
-    ms; `render` no debe reintroducir precisión.
-    """
-    return {
-        "_id": log.id,
-        "action": log.action,
-        "entity_type": log.entity_type,
-        "checksum": log.checksum,
-        "details": log.details,
-        "performed_at": rfc3339_utc(log.performed_at),
-        "received_at": rfc3339_utc(log.received_at),
-    }
-
-
-__all__ = ["render", "to_audit_log", "to_document"]
+__all__ = ["to_audit_log", "to_document"]

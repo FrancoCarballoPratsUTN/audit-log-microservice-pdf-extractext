@@ -16,12 +16,11 @@ from pymongo import AsyncMongoClient
 from app.domain.models import CreateAuditLogRequest
 from app.errors import AuditStorageError
 from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
-from app.repositories.mongodb import ensure_indexes
+from app.repositories.mongodb import STORAGE_UNAVAILABLE, ensure_indexes
 from app.repositories.protocol import ReplayDetected
 
 PERFORMED_AT = datetime(2026, 10, 5, 12, 34, 56, 789000, tzinfo=UTC)
 CHECKSUM = "9f86d081884c7d659a2feaa0c55ad015"
-STORAGE_DETAIL = "MongoDB is unavailable."
 
 
 def make_request(**overrides: object) -> CreateAuditLogRequest:
@@ -151,4 +150,4 @@ async def test_a_connection_failure_is_reported_as_a_storage_error() -> None:
     finally:
         await client.close()
 
-    assert failure.value.detail == STORAGE_DETAIL
+    assert failure.value.detail == STORAGE_UNAVAILABLE

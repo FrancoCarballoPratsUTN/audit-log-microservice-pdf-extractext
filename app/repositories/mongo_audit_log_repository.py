@@ -1,8 +1,7 @@
 """Capa 3: el repositorio sobre MongoDB.
 
-Cumple el contrato de `protocol.AuditLogRepository` estructuralmente: hoy
-`insert`, `find_replay`, `list` (T12) y `find_by_checksum` (T13); `count` queda
-como capacidad del puerto aún sin uso.
+Cumple el contrato de `protocol.AuditLogRepository` estructuralmente con
+`insert`, `find_replay`, `list` (T12) y `find_by_checksum` (T13).
 
 Traduce las excepciones del driver según SPEC §6.4 y sólo esas:
 `DuplicateKeyError` es la señal de replay (Barrera 2 de §5.3), `DocumentTooLarge`
@@ -26,10 +25,9 @@ from pymongo.errors import DocumentTooLarge, DuplicateKeyError, PyMongoError
 
 from app.domain.models import AuditLog, CreateAuditLogRequest
 from app.errors import AuditStorageError, PayloadTooLargeError, ValidationError
+from app.repositories.mongodb import STORAGE_UNAVAILABLE
 from app.repositories.protocol import ReplayDetected
 from app.repositories.serialization import to_audit_log, to_document
-
-STORAGE_UNAVAILABLE = "MongoDB is unavailable."
 
 
 class MongoAuditLogRepository:

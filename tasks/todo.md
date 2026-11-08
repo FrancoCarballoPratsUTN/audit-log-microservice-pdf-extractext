@@ -328,11 +328,11 @@
   - [x] `details` se normaliza en un solo sitio y las ramas `details is None` inalcanzables desaparecen
   - [x] El tipo declarado refleja lo que realmente se acepta (`Any`/`JsonValue`, no `dict`)
 
-- [ ] **T29: Eliminar código muerto y duplicados** · H-15b
-  - [ ] No queda `render`, `count`, `seed` ni `count_error` sin uso
-  - [ ] No hay dos constantes para el mismo mensaje de storage
-  - [ ] El docstring del fake describe el comportamiento real del servicio
-  - [ ] La suite sigue verde y sin pérdida de cobertura
+- [x] **T29: Eliminar código muerto y duplicados** · H-15b
+  - [x] No queda `render`, `count`, `seed` ni `count_error` sin uso
+  - [x] No hay dos constantes para el mismo mensaje de storage
+  - [x] El docstring del fake describe el comportamiento real del servicio
+  - [x] La suite sigue verde y sin pérdida de cobertura
 
 ### Checkpoint C — Cierre
 - [ ] `U` verde.

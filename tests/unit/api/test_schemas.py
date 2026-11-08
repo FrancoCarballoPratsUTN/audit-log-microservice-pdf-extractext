@@ -136,9 +136,9 @@ def test_response_carries_the_seven_fields_the_go_client_decodes() -> None:
 
 
 def test_response_dates_are_strings_not_datetimes() -> None:
-    """El render RFC 3339 es de `app/repositories/serialization.py`. Dejar que
-    Pydantic reformatee un `datetime` arriesgaría un `+00:00` o relleno de
-    microsegundos, y el formato tiene que llegar a Go byte a byte."""
+    """El formato RFC 3339 lo pone `to_wire_fields`. Dejar que Pydantic
+    reformatee un `datetime` arriesgaría un `+00:00` o relleno de microsegundos,
+    y el formato tiene que llegar a Go byte a byte."""
     field = AuditLogResponse.model_fields["performed_at"]
     assert field.annotation is str
 

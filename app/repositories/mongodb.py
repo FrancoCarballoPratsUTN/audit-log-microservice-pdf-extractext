@@ -29,6 +29,7 @@ from app.errors import AuditStorageError
 logger = logging.getLogger(__name__)
 
 SECONDS_PER_DAY = 24 * 60 * 60
+STORAGE_UNAVAILABLE = "MongoDB is unavailable."
 
 Document = dict[str, Any]
 
@@ -177,7 +178,7 @@ async def ping(client: AsyncMongoClient[Document]) -> None:
     try:
         await client.admin.command("ping")
     except PyMongoError as exc:
-        raise AuditStorageError("MongoDB is unavailable.") from exc
+        raise AuditStorageError(STORAGE_UNAVAILABLE) from exc
 
 
 async def ensure_indexes(collection: Any, *, retention_days: int) -> None:

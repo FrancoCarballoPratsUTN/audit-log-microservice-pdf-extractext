@@ -6,9 +6,9 @@ queda vacío y el orquestador ve un log de auditoría sin identidad y sin error
 (SPEC §2.5 H3). `tests/unit/api/test_schemas.py` falla si el alias desaparece.
 
 `performed_at` y `received_at` son `str` a propósito. RFC 3339 con `Z` y
-milisegundos no es lo que Pydantic emite para un `datetime`, y el render tiene
-que llegar a Go byte a byte; el formateo lo aporta
-`app/domain.models.to_wire_fields`, compartido por escritura y lectura.
+milisegundos no es lo que Pydantic emite para un `datetime`, y el formato tiene
+que llegar a Go byte a byte; lo aporta `app/domain.models.to_wire_fields`,
+compartido por escritura y lectura.
 """
 
 from typing import Any

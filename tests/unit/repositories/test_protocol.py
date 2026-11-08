@@ -13,7 +13,7 @@ from tests.fakes.fake_repository import FakeAuditLogRepository
 
 def test_the_fake_satisfies_the_repository_protocol() -> None:
     """Cumplimiento estructural: el fake no hereda del `Protocol`, sólo
-    implementa sus métodos. Si alguien renombra uno de los cinco, el
+    implementa sus métodos. Si alguien renombra uno de los cuatro, el
     `runtime_checkable` lo delata aquí y no en el ensamblaje de T9."""
     assert isinstance(FakeAuditLogRepository(), AuditLogRepository)
 

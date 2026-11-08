@@ -64,10 +64,6 @@ class AuditLogRepository(Protocol):
         """
         ...
 
-    async def count(self) -> int:
-        """Contar el total de eventos."""
-        ...
-
 
 class ReplayDetected(Exception):
     """Señal de que el evento ya estaba almacenado (Barrera 2 de §5.3).

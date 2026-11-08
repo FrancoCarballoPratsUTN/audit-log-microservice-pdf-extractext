@@ -1,23 +1,19 @@
-"""Serialización: el único punto donde BSON se cruza con el dominio y con el
-JSON de la API.
+"""Serialización BSON ⇄ dominio.
 
-Si este mapeo se desparrama por los endpoints, cada uno acaba emitiendo fechas
-con un formato distinto (con y sin milisegundos, `+00:00` en vez de `Z`) y el
-orquestador acepta unas y rechaza otras sin que el servicio se entere. Por eso
-las fechas y el `ObjectId` se fijan aquí, byte a byte, y no en un test de
-contrato lejano (SPEC §2.4 y §6.2).
+`to_document` construye el documento de escritura y `to_audit_log` lo convierte
+de vuelta al dominio; el formato del cable vive en
+`app.domain.models.to_wire_fields`.
 """
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from bson import ObjectId
 
-from app.domain.models import AuditLog, CreateAuditLogRequest
-from app.repositories.serialization import render, to_audit_log, to_document
+from app.domain.models import CreateAuditLogRequest
+from app.repositories.serialization import to_audit_log, to_document
 
 PERFORMED_AT = datetime(2026, 10, 5, 12, 34, 56, 789000, tzinfo=UTC)
 CHECKSUM = "9f86d081884c7d659a2feaa0c55ad015"
-WIRE_ID = "68e2c1f4a1b2c3d4e5f60718"
 
 
 def make_request(**overrides: object) -> CreateAuditLogRequest:
@@ -46,21 +42,6 @@ def make_document(**overrides: object) -> dict[str, object]:
     }
     document.update(overrides)
     return document
-
-
-def make_log(**overrides: object) -> AuditLog:
-    """Registro de dominio listo para renderizar."""
-    values: dict[str, object] = {
-        "id": WIRE_ID,
-        "action": "pdf.extract",
-        "entity_type": "document",
-        "checksum": CHECKSUM,
-        "performed_at": PERFORMED_AT,
-        "received_at": datetime(2026, 10, 5, 12, 34, 57, 41000, tzinfo=UTC),
-        "details": {"page_count": 12},
-    }
-    values.update(overrides)
-    return AuditLog(**values)
 
 
 def test_to_document_assigns_an_object_id() -> None:
@@ -134,7 +115,7 @@ def test_to_audit_log_uses_the_object_id_hex_as_id() -> None:
 
 def test_to_audit_log_makes_naive_dates_utc_aware() -> None:
     """PyMongo devuelve datetimes *naive* interpretados en UTC: sin ese paso,
-    `AuditLog` los trataría como hora local de la máquina y `render` los
+    `AuditLog` los trataría como hora local de la máquina y el wire los
     desplazaría horas."""
     log = to_audit_log(make_document())
 
@@ -172,58 +153,3 @@ def test_the_round_trip_preserves_every_stored_field() -> None:
     assert log.entity_type == document["entity_type"]
     assert log.checksum == document["checksum"]
     assert log.details == document["details"]
-
-
-def test_render_returns_exactly_the_seven_wire_fields() -> None:
-    """SPEC §2.4 enumera siete campos. Aquí se fija el conjunto exacto: un
-    campo de más o de menos desvía el contrato del orquestador."""
-    assert set(render(make_log())) == {
-        "_id",
-        "action",
-        "entity_type",
-        "checksum",
-        "details",
-        "performed_at",
-        "received_at",
-    }
-
-
-def test_render_formats_the_dates_as_rfc3339_utc_with_z() -> None:
-    """El formato byte a byte de SPEC §2.4: `Z` y milisegundos. `+00:00` o
-    seis decimales no los parsea `time.Time` del orquestador."""
-    rendered = render(make_log())
-
-    assert rendered["performed_at"] == "2026-10-05T12:34:56.789Z"
-    assert rendered["received_at"] == "2026-10-05T12:34:57.041Z"
-
-
-def test_render_converts_any_offset_to_utc_before_formatting() -> None:
-    """Una petición con `+02:00` llega normalizada al dominio, pero el render
-    no debe fiarse de eso: convierte siempre."""
-    log = make_log(
-        performed_at=datetime(
-            2026, 10, 5, 14, 34, 56, tzinfo=timezone(timedelta(hours=2))
-        )
-    )
-
-    assert render(log)["performed_at"] == "2026-10-05T12:34:56.000Z"
-
-
-def test_render_truncates_sub_millisecond_precision() -> None:
-    """BSON Date y el contrato comparten precisión de milisegundos; el dominio
-    ya truncó el valor. `render` no debe reintroducir microsegundos ni redondear
-    (`.7896` → `.789`, nunca `.790`)."""
-    log = make_log(performed_at=datetime(2026, 10, 5, 12, 34, 56, 789600, tzinfo=UTC))
-
-    assert render(log)["performed_at"] == "2026-10-05T12:34:56.789Z"
-
-
-def test_render_keeps_the_id_and_details_intact() -> None:
-    """`_id` sale como string plano y `details` sin tocar: render no debe
-    reinterpretar lo que ya interpretó `to_audit_log`."""
-    details = {"page_count": 12, "nested": {"$ref": "x"}}
-
-    rendered = render(make_log(details=details))
-
-    assert rendered["_id"] == WIRE_ID
-    assert rendered["details"] == details

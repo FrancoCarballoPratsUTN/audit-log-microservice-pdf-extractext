@@ -1,7 +1,7 @@
 """Doble de test en memoria para `AuditLogRepository`.
 
 Sigue KISS: almacenamiento en lista, orden estable, contador de llamadas y
-barreras de error configurables. Se usa en T9 y T11.
+barreras de error configurables. Se usa en los tests de servicio y de protocolo.
 """
 
 from __future__ import annotations
@@ -23,25 +23,19 @@ class FakeAuditLogRepository:
         find_replay_error: Exception | None = None,
         find_by_checksum_error: Exception | None = None,
         list_error: Exception | None = None,
-        count_error: Exception | None = None,
     ) -> None:
         self._items: list[AuditLog] = list(items or [])
         self.insert_error = insert_error
         self.find_replay_error = find_replay_error
         self.find_by_checksum_error = find_by_checksum_error
         self.list_error = list_error
-        self.count_error = count_error
         self.insert_calls = 0
         self.find_replay_calls = 0
-
-    def seed(self, items: list[AuditLog]) -> None:
-        """Añade eventos precargados al fake."""
-        self._items.extend(items)
 
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
         """Inserta un nuevo evento, asignando `id` y `received_at`.
 
-        Genera un `id` estable para facilitar las aserciones en tests (hex-like).
+        El `id` es un UUID único; los tests no dependen de su valor.
         """
         if self.insert_error is not None:
             raise self.insert_error
@@ -88,7 +82,7 @@ class FakeAuditLogRepository:
         return None
 
     async def find_by_checksum(self, checksum: str) -> list[AuditLog]:
-        """Filtra por checksum. No ordena: el orden lo normaliza el servicio."""
+        """Filtra por checksum conservando el orden de inserción del fake."""
         if self.find_by_checksum_error is not None:
             raise self.find_by_checksum_error
 
@@ -104,13 +98,6 @@ class FakeAuditLogRepository:
             key=lambda log: (-log.performed_at.timestamp(), log.id),
         )
         return sorted_items[skip : skip + limit]
-
-    async def count(self) -> int:
-        """Cuenta total de elementos."""
-        if self.count_error is not None:
-            raise self.count_error
-
-        return len(self._items)
 
 
 __all__ = ["FakeAuditLogRepository"]

@@ -37,9 +37,8 @@ def _normalize_details(details: Any) -> Any:
 def rfc3339_utc(value: datetime) -> str:
     """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos.
 
-    Es la representación que parsea `time.Time` del orquestador (§2.4). La usan
-    `to_wire_fields` (Capa 1) y `serialization.render` (Capa 3), para que un
-    solo formato llegue al cable.
+    Es la representación que parsea `time.Time` del orquestador (§2.4). La usa
+    `to_wire_fields`, para que un solo formato llegue al cable.
     """
     utc = value.astimezone(UTC)
     return f"{utc:%Y-%m-%dT%H:%M:%S}.{utc.microsecond // 1000:03d}Z"
