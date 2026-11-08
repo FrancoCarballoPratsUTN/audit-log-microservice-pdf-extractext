@@ -89,15 +89,14 @@ curl -k --resolve audit.universidad.localhost:443:127.0.0.1 \
 ellos, compose falla al levantar. MongoDB corre en el stack compartido y el
 compose de AUDA no publica su puerto.
 
-El despliegue debe limitar la tasa de respuestas `401` en Traefik (middleware
-`rateLimit` sobre el router de AUDA) como mitigación de floods de credenciales
-inválidas.
+Traefik se usa sin middlewares ni circuit breaker: el router de AUDA solo
+reenvía al contenedor en el puerto `8000`. El retry de Traefik al backend está
+deshabilitado (`loadbalancer.retry.attempts=0`), así que una caída del
+microservicio se reporta tal cual sin reintentos ocultos.
 
 El límite de body exige `Content-Length`. Un `POST` sin esa cabecera —por
 ejemplo, `Transfer-Encoding: chunked` o HTTP/2 sin longitud— se rechaza con
-`413` antes de leer el cuerpo. Los clientes deben declarar `Content-Length`;
-Traefik aplica además `buffering.maxRequestBodyBytes` con el mismo
-`MAX_BODY_BYTES`.
+`413` antes de leer el cuerpo. Los clientes deben declarar `Content-Length`.
 
 ## Pruebas de stress (Vegeta + k6)
 
