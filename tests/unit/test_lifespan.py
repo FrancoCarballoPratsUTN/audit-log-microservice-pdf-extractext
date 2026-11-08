@@ -4,11 +4,10 @@ import signal
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.main import create_app, lifespan
 from tests.fakes.fake_mongo import WorkingClient, WorkingCollection
-from tests.unit._main_common import TOKEN, clean_environment, configured
+from tests.unit._main_common import TOKEN  # noqa: F401
 
 
 async def test_shutdown_deregisters_consul_and_closes_the_client_once(
