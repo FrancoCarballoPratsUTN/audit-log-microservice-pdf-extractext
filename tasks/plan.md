@@ -916,3 +916,480 @@ SPEC §2.7):
 > que los puntos 1-4 son un prerrequisito del despliegue de AUDA, no un trabajo
 > paralelo. El fallo se manifiesta como un error de arranque, no como una
 > auditoría detenida en silencio.
+
+---
+
+## Fase 9: Refactorización por principios de clean code (KISS, YAGNI, SOLID, DRY, ≤100 líneas)
+
+> Objetivo: que **ningún archivo** de `app/` ni de `tests/` supere las 100 líneas
+> de código, sin cambiar el comportamiento observable ni romper ningún test.
+> Cada tarea es pequeña (1-3 archivos) y verificable de forma independiente.
+
+### Fase 9.1 — Producción: archivos > 100 líneas y DRY crítico
+
+#### P1: Extraer traductor de errores de PyMongo del repositorio
+
+**Descripción:** `mongo_audit_log_repository.py` (176 líneas) repite el mismo bloque
+`try/except PyMongoError` en los 4 métodos (`insert`, `find_replay`, `list`,
+`find_by_checksum`). Extraer ese mapeo a un decorador `translate_pymongo_errors`
+en `app/repositories/mongo_errors.py` y dejar el repositorio con solo consultas.
+
+**Acceptance criteria:**
+- [ ] `mongo_audit_log_repository.py` ≤ 100 líneas.
+- [ ] `mongo_errors.py` nuevo, ≤ 60 líneas, con el decorador.
+- [ ] Los 4 comportamientos de error (replay, 413, 400, 503) se preservan.
+
+**Verification:** `uv run pytest tests/unit/repositories/ tests/integration/repositories/`
+
+**Dependencies:** T8, T9, T10 del plan original
+
+**Files likely touched:**
+- `app/repositories/mongo_errors.py`
+- `app/repositories/mongo_audit_log_repository.py`
+
+**Estimated scope:** Small
+
+---
+
+#### P2: Dividir el router de auditoría en 3 responsabilidades
+
+**Descripción:** `app/api/routers/audit_logs.py` (256 líneas) mezcla rutas,
+validación de BSON/`details` y construcción de respuesta. Extraer:
+`app/api/validators/details.py` (validación de `details`, `BSON.encode`, nesting,
+`MAX_DETAILS_BYTES`) y `app/api/presenters/audit_log.py` (construcción de
+`AuditLogResponse`, headers `Location`/`X-Idempotent-Replay`, `JSONResponse`).
+
+**Acceptance criteria:**
+- [ ] `audit_logs.py` ≤ 100 líneas (solo rutas + `Depends` + `response_model`).
+- [ ] `validators/details.py` ≤ 60 líneas.
+- [ ] `presenters/audit_log.py` ≤ 60 líneas.
+- [ ] El router deja de importar `bson`.
+
+**Verification:** `uv run pytest tests/integration/api/test_create_audit_log.py tests/unit/api/routers/test_audit_logs_router.py`
+
+**Dependencies:** T10 del plan original
+
+**Files likely touched:**
+- `app/api/routers/audit_logs.py`
+- `app/api/validators/details.py`
+- `app/api/presenters/audit_log.py`
+
+**Estimated scope:** Medium
+
+---
+
+#### P3: Dividir middleware.py en un archivo por middleware
+
+**Descripción:** `app/api/middleware.py` (230 líneas) contiene 5 middlewares +
+`install_middleware` + `parse_content_length`. Extraer un archivo por
+middleware (`request_id.py`, `content_type.py`, `body_size.py`, `access_log.py`)
+y dejar `install.py` solo con el orden del stack.
+
+**Acceptance criteria:**
+- [ ] Cada archivo nuevo ≤ 50 líneas.
+- [ ] `install.py` ≤ 60 líneas.
+- [ ] El orden `401 → 415 → 413 → 400` se mantiene.
+
+**Verification:** `uv run pytest tests/unit/api/test_middleware.py`
+
+**Dependencies:** T14 del plan original
+
+**Files likely touched:**
+- `app/api/middleware/request_id.py`
+- `app/api/middleware/content_type.py`
+- `app/api/middleware/body_size.py`
+- `app/api/middleware/access_log.py`
+- `app/api/middleware/install.py`
+
+**Estimated scope:** Medium
+
+---
+
+#### P4: Dividir main.py en composition root + bootstrap de Consul + logging
+
+**Descripción:** `app/main.py` (182 líneas) mezcla settings, registro Consul,
+logging, lifespan, Mongo y routers. Extraer `app/bootstrap/consul.py`
+(`_settings_from_environment_or_consul`, `_consul_registration`) y
+`app/bootstrap/logging.py` (`_configure_logging`).
+
+**Acceptance criteria:**
+- [ ] `main.py` ≤ 100 líneas.
+- [ ] `bootstrap/consul.py` ≤ 70 líneas.
+- [ ] `bootstrap/logging.py` ≤ 20 líneas.
+
+**Verification:** `uv run pytest tests/unit/test_main.py`
+
+**Dependencies:** T4, T6, T14 del plan original
+
+**Files likely touched:**
+- `app/main.py`
+- `app/bootstrap/consul.py`
+- `app/bootstrap/logging.py`
+
+**Estimated scope:** Small
+
+---
+
+#### P5: Dividir mongodb.py en index_specs + client
+
+**Descripción:** `app/repositories/mongodb.py` (207 líneas) mezcla la declaración
+de índices como datos (`IndexSpec`) con las funciones de cliente
+(`open_client`, `audit_logs_collection`, `ping`, `ensure_indexes`). Extraer
+a `app/repositories/index_specs.py`.
+
+**Acceptance criteria:**
+- [ ] `mongodb.py` ≤ 100 líneas.
+- [ ] `index_specs.py` ≤ 80 líneas.
+
+**Verification:** `uv run pytest tests/unit/repositories/test_mongodb_lifecycle.py`
+
+**Dependencies:** T6 del plan original
+
+**Files likely touched:**
+- `app/repositories/index_specs.py`
+- `app/repositories/mongodb.py`
+
+**Estimated scope:** Small
+
+---
+
+#### P6: Comprimir errors.py con factory de errores
+
+**Descripción:** `app/errors.py` (136 líneas) declara 8 clases con los mismos 6
+atributos `ClassVar`. Extraer una factory `make_error` para reducir repetición
+sin perder claridad.
+
+**Acceptance criteria:**
+- [ ] `errors.py` ≤ 100 líneas.
+- [ ] La matriz de 8 errores se preserva intacta.
+
+**Verification:** `uv run pytest tests/unit/test_errors.py`
+
+**Dependencies:** T2 del plan original
+
+**Files likely touched:**
+- `app/errors.py`
+
+**Estimated scope:** Small
+
+---
+
+#### P7: Eliminar get_settings_from_values duplicado en config.py
+
+**Descripción:** `app/config.py` (125 líneas) tiene `get_settings_from_values`
+que solo llama a `get_settings(values)`. Eliminar uno.
+
+**Acceptance criteria:**
+- [ ] `config.py` ≤ 100 líneas.
+- [ ] `get_settings_from_values` eliminado; `main.py` llama a `get_settings` directamente.
+
+**Verification:** `uv run pytest tests/unit/test_config.py`
+
+**Dependencies:** T4 del plan original
+
+**Files likely touched:**
+- `app/config.py`
+- `app/main.py`
+
+**Estimated scope:** XS
+
+---
+
+#### P8: Inline _find_existing en audit_log_service.py
+
+**Descripción:** `app/services/audit_log_service.py` (119 líneas). `_find_existing`
+es un delegado de 7 líneas sin valor añadido; inline en `create`.
+
+**Acceptance criteria:**
+- [ ] `audit_log_service.py` ≤ 100 líneas.
+
+**Verification:** `uv run pytest tests/unit/services/test_audit_log_service.py`
+
+**Dependencies:** T9 del plan original
+
+**Files likely touched:**
+- `app/services/audit_log_service.py`
+
+**Estimated scope:** XS
+
+---
+
+#### P9: Extraer _normalize_domain_instance en domain/models.py
+
+**Descripción:** `app/domain/models.py` (118 líneas). `CreateAuditLogRequest` y
+`AuditLog` tienen `__post_init__` idéntico. Extraer a `_normalize_domain_instance`.
+
+**Acceptance criteria:**
+- [ ] `domain/models.py` ≤ 100 líneas.
+- [ ] La normalización (UTC, ms truncado, `None → {}`) se conserva.
+
+**Verification:** `uv run pytest tests/unit/domain/test_models.py`
+
+**Dependencies:** T7 del plan original
+
+**Files likely touched:**
+- `app/domain/models.py`
+
+**Estimated scope:** Small
+
+---
+
+#### P10: Comprimir auth.py, schemas.py, exception_handlers.py
+
+**Descripción:** `auth.py` (111), `schemas.py` (105), `exception_handlers.py`
+(103) están justo sobre el límite. Comprimir constantes, ajustar `from_log` y
+simplificar handlers.
+
+**Acceptance criteria:**
+- [ ] `auth.py` ≤ 100 líneas.
+- [ ] `schemas.py` ≤ 100 líneas.
+- [ ] `exception_handlers.py` ≤ 100 líneas.
+- [ ] Sigue sin emitir `422`.
+
+**Verification:** `uv run pytest tests/unit/api/test_auth.py tests/unit/api/test_schemas.py tests/unit/api/test_exception_handlers.py`
+
+**Dependencies:** T3, T5 del plan original
+
+**Files likely touched:**
+- `app/api/auth.py`
+- `app/api/schemas.py`
+- `app/api/exception_handlers.py`
+
+**Estimated scope:** Small
+
+---
+
+### Fase 9.2 — Tests: archivos > 100 líneas
+
+#### T1: Dividir test_middleware.py (371 líneas)
+
+**Descripción:** Extraer en 4 archivos temáticos: `test_stack_order.py`,
+`test_auth_priority.py`, `test_body_size_content_type.py`,
+`test_request_id_cors_access_log_500.py`.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 60 líneas.
+- [ ] El comportamiento probado es idéntico al original.
+
+**Verification:** `uv run pytest tests/unit/api/`
+
+**Dependencies:** P3
+
+**Files likely touched:**
+- `tests/unit/api/test_stack_order.py`
+- `tests/unit/api/test_auth_priority.py`
+- `tests/unit/api/test_body_size_content_type.py`
+- `tests/unit/api/test_request_id_cors_access_log_500.py`
+
+**Estimated scope:** Medium
+
+---
+
+#### T2: Dividir test_main.py (361 líneas)
+
+**Descripción:** Extraer en 3 archivos: `test_app_imports_factory.py`,
+`test_auth_end_to_end.py`, `test_lifespan_consul_docker.py`.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 60 líneas.
+- [ ] El comportamiento probado es idéntico al original.
+
+**Verification:** `uv run pytest tests/unit/test_main.py`
+
+**Dependencies:** P4
+
+**Files likely touched:**
+- `tests/unit/test_app_imports_factory.py`
+- `tests/unit/test_auth_end_to_end.py`
+- `tests/unit/test_lifespan_consul_docker.py`
+
+**Estimated scope:** Medium
+
+---
+
+#### T3: Dividir test_create_audit_log.py (246 líneas)
+
+**Descripción:** Extraer `VALID_EVENT` y `AUTH` a `tests/integration/helpers.py`;
+dividir en 3 archivos temáticos: `test_create_status_location.py`,
+`test_create_idempotency.py`, `test_create_validation_payload.py`.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 60 líneas.
+- [ ] `helpers.py` con `VALID_EVENT`, `AUTH`, `app_client()`.
+
+**Verification:** `uv run pytest tests/integration/api/test_create_audit_log.py`
+
+**Dependencies:** P2
+
+**Files likely touched:**
+- `tests/integration/helpers.py`
+- `tests/integration/api/test_create_status_location.py`
+- `tests/integration/api/test_create_idempotency.py`
+- `tests/integration/api/test_create_validation_payload.py`
+
+**Estimated scope:** Medium
+
+---
+
+#### T4: Dividir test_error_matrix.py (225 líneas)
+
+**Descripción:** Separar la definición de filas de la matriz de los tests de
+inyección de faults y de la garantía negativa de `422`.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 80 líneas.
+
+**Verification:** `uv run pytest tests/integration/api/test_error_matrix.py`
+
+**Dependencies:** T15 del plan original
+
+**Files likely touched:**
+- `tests/integration/api/test_error_matrix_rows.py`
+- `tests/integration/api/test_error_matrix_faults.py`
+- `tests/integration/api/test_no_422.py`
+
+**Estimated scope:** Small
+
+---
+
+#### T5: Dividir test_errors.py (209 líneas)
+
+**Descripción:** Separar la matriz de datos de los tests de comportamiento
+y los guards de drift.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 70 líneas.
+
+**Verification:** `uv run pytest tests/unit/test_errors.py`
+
+**Dependencies:** P6
+
+**Files likely touched:**
+- `tests/unit/test_errors_matrix.py`
+- `tests/unit/test_errors_behavior.py`
+- `tests/unit/test_errors_drift.py`
+
+**Estimated scope:** Small
+
+---
+
+#### T6: Dividir test_consul.py (165 líneas)
+
+**Descripción:** Separar tests de `load_prefix` de tests de `register`/`deregister`.
+
+**Acceptance criteria:**
+- [ ] Cada archivo ≤ 60 líneas.
+
+**Verification:** `uv run pytest tests/unit/test_consul.py`
+
+**Dependencies:** None
+
+**Files likely touched:**
+- `tests/unit/test_consul_load_prefix.py`
+- `tests/unit/test_consul_agent.py`
+
+**Estimated scope:** Small
+
+---
+
+#### T7: Reducir fake_repository.py (103 líneas)
+
+**Descripción:** Justo sobre el límite. Comprimir la clase para bajar de 100.
+
+**Acceptance criteria:**
+- [ ] `fake_repository.py` ≤ 100 líneas.
+
+**Verification:** `uv run pytest tests/unit/repositories/test_protocol.py`
+
+**Dependencies:** T7 del plan original
+
+**Files likely touched:**
+- `tests/fakes/fake_repository.py`
+
+**Estimated scope:** XS
+
+---
+
+### Fase 9.3 — Verificación final
+
+#### V1: Ejecutar suite completa y verificar cobertura
+
+**Descripción:** `uv run pytest --cov=app --cov-fail-under=85` debe pasar.
+
+**Acceptance criteria:**
+- [ ] Suite verde.
+- [ ] Cobertura ≥ 85 %.
+- [ ] Sin `skip` ni `xfail`.
+
+**Verification:** `uv run pytest --cov=app --cov-fail-under=85`
+
+**Dependencies:** P1–P10, T1–T7
+
+**Files likely touched:** Ninguno (solo verificación)
+
+**Estimated scope:** Small
+
+---
+
+#### V2: Verificar límite de 100 líneas en todos los archivos
+
+**Descripción:** Script de comprobación que recorre `app/` y `tests/` y falla si
+algún `.py` supera 100 líneas.
+
+**Acceptance criteria:**
+- [ ] Cero archivos > 100 líneas en `app/` y `tests/`.
+
+**Verification:** `python tools/check_file_length.py`
+
+**Dependencies:** P1–P10, T1–T7
+
+**Files likely touched:** `tools/check_file_length.py` (nuevo)
+
+**Estimated scope:** XS
+
+---
+
+#### V3: Lint y formato
+
+**Descripción:** `uv run ruff check .` y `uv run ruff format --check .` limpios.
+
+**Acceptance criteria:**
+- [ ] Sin violaciones de lint ni de formato.
+
+**Verification:** `uv run ruff check . && uv run ruff format --check .`
+
+**Dependencies:** P1–P10, T1–T7
+
+**Files likely touched:** Ninguno (solo verificación)
+
+**Estimated scope:** Small
+
+---
+
+### Checkpoint: Refactorización completa
+
+- [ ] Cero archivos en `app/` y `tests/` superan las 100 líneas.
+- [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa (suite completa).
+- [ ] `uv run ruff check .` y `uv run ruff format --check .` limpios.
+- [ ] Sin cambio de comportamiento observable: misma matriz de errores, misma
+  forma de respuesta (array de primer nivel), misma idempotencia, mismo contrato
+  RFC 9457.
+- [ ] Revisión humana antes de cerrar.
+
+---
+
+### Riesgos y mitigaciones de la refactorización
+
+| Riesgo | Impacto | Mitigación |
+|--------|---------|------------|
+| Romper el contrato HTTP al mover `bson` del router | Alto | Tests de integración contra Mongo real validan la forma exacta de la respuesta |
+| Perder cobertura al dividir tests | Medio | Cada test dividido mantiene sus aserciones originales; suite completa tras cada checkpoint |
+| Import circular al extraer `validators`/`presenters` | Bajo | Las nuevas capas solo importan de capas inferiores o iguales, nunca al revés |
+| Olvidar actualizar imports en `main.py` tras dividir | Bajo | `uv run pytest --collect-only` y `import app.main` lo detectan inmediatamente |
+
+### Orden de ejecución recomendado
+
+1. **Producción independiente:** P1, P5, P6, P7, P8, P9, P10 (se pueden hacer en paralelo salvo que toquen el mismo archivo).
+2. **Producción con archivo compartido:** P2 (`audit_logs.py`), P3 (`middleware.py`), P4 (`main.py`) — serializar entre sí.
+3. **Tests:** T1–T7 (dividir según cambios de producción ya hechos).
+4. **Verificación:** V1, V2, V3.

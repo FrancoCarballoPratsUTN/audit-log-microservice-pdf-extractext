@@ -15,7 +15,7 @@
 
 ## Phase 1: Foundation
 
-- [x] **T1: Project scaffolding**
+- [x] **T40: Project scaffolding**
   - [x] `pyproject.toml` con uv, fastapi, pydantic, pydantic-settings, pymongo, uvicorn
   - [x] pytest + pytest-asyncio (`asyncio_mode = "auto"`) + pytest-cov + httpx + ruff
   - [x] Árbol de paquetes y layout de tests espejo de `app/`
@@ -25,13 +25,13 @@
   - [x] `tests/unit/test_package_layout.py` — la dirección de dependencias es un test, no una nota
   - [x] `uv run ruff check .` · `uv run ruff format --check .` limpios
 
-- [x] **T2: Jerarquía de errores**
+- [x] **T41: Jerarquía de errores**
   - [x] `ServiceError` base con `status` / `code` / `type_uri` / `title`
   - [x] Las 8 subclases de SPEC §7.2
   - [x] Guard de drift contra la matriz de SPEC §7.2
   - [x] Test de mutación: cambiar `AuditStorageError.status` rompe el test
 
-- [x] **T3: Problem details + handlers + schemas**
+- [x] **T42: Problem details + handlers + schemas**
   - [x] `app/api/problem.py` — cuerpo `application/problem+json` con los 6 campos
   - [x] `app/api/exception_handlers.py` — `ServiceError`, `RequestValidationError`, HTTP, catch-all
   - [x] **`RequestValidationError` → `400 VALIDATION_ERROR`; ningún `422`**
@@ -55,7 +55,7 @@
 
 ## Phase 2: Autenticación
 
-- [x] **T4: Config + token**
+- [x] **T43: Config + token**
   - [x] `app/config.py` con `pydantic-settings` y las 12 variables de SPEC §3.6
   - [x] `SERVICE_API_TOKEN` **sin default**: la app no arranca sin ella
   - [x] Token vacío o sólo con espacios tratado como ausente
@@ -64,7 +64,7 @@
   - [x] El token nunca aparece en logs, en `repr` ni en mensajes de error
   - [x] `get_settings(environ=…)` acepta un `Mapping`, sin mutar el proceso
 
-- [x] **T5: Middleware de autenticación**
+- [x] **T44: Middleware de autenticación**
   - [x] Bearer + `secrets.compare_digest`
   - [x] `401` con `WWW-Authenticate: Bearer`
   - [x] `detail` **idéntico** en los 7 casos de fallo (sin oráculo)
@@ -86,7 +86,7 @@
 
 ## Phase 3: Core vertical slice — escritura + idempotencia ★
 
-- [x] **T6: Lifecycle de Mongo + índices**
+- [x] **T45: Lifecycle de Mongo + índices**
   - [x] `AsyncMongoClient` con timeout; `ping` en el `lifespan`
   - [x] Índice único `(action, entity_type, checksum, performed_at)`
   - [x] Compuestos con `_id desc`
@@ -101,7 +101,7 @@
   - [x] Test de mutación: TTL siempre activo / `unique=False` / `_id` ascendente /
         sin traducción de `PyMongoError` / sin cierre ⇒ los 5 tests se ponen rojos
 
-- [x] **T7: Puerto + doble de test**
+- [x] **T46: Puerto + doble de test**
   - [x] `AuditLogRepository` como `Protocol` (5 métodos)
   - [x] Dataclasses de dominio (`AuditLog`, `CreateAuditLogRequest`)
   - [x] `FakeAuditLogRepository` con contador de llamadas (`insert` y `find_replay`) y barreras de error
@@ -389,3 +389,101 @@
 - Los índices se limpian en cada test, no una vez por sesión: MongoDB nunca borra
   un índice, y uno creado por un test anterior haría pasar al siguiente sin que
   hubiera creado nada. Durante T6 esto pasó y se detectó.
+
+---
+
+## Fase 9: Refactorización por principios de clean code (≤100 líneas por archivo)
+
+### Fase 9.1 — Producción: archivos > 100 líneas y DRY crítico
+
+- [ ] **T30: Extraer traductor de errores de PyMongo del repositorio**
+  - [ ] `mongo_audit_log_repository.py` ≤ 100 líneas
+  - [ ] `mongo_errors.py` nuevo, ≤ 60 líneas, con decorador `translate_pymongo_errors`
+  - [ ] Comportamientos de error (replay, 413, 400, 503) preservados
+
+- [ ] **T31: Dividir el router de auditoría en 3 responsabilidades**
+  - [ ] `audit_logs.py` ≤ 100 líneas (solo rutas + Depends + response_model)
+  - [ ] `validators/details.py` ≤ 60 líneas
+  - [ ] `presenters/audit_log.py` ≤ 60 líneas
+  - [ ] El router deja de importar `bson`
+
+- [ ] **T32: Dividir middleware.py en un archivo por middleware**
+  - [ ] Cada archivo nuevo ≤ 50 líneas
+  - [ ] `install.py` ≤ 60 líneas
+  - [ ] Orden `401 → 415 → 413 → 400` mantenido
+
+- [ ] **T33: Dividir main.py en composition root + bootstrap de Consul + logging**
+  - [ ] `main.py` ≤ 100 líneas
+  - [ ] `bootstrap/consul.py` ≤ 70 líneas
+  - [ ] `bootstrap/logging.py` ≤ 20 líneas
+
+- [ ] **T34: Dividir mongodb.py en index_specs + client**
+  - [ ] `mongodb.py` ≤ 100 líneas
+  - [ ] `index_specs.py` ≤ 80 líneas
+
+- [ ] **T35: Comprimir errors.py con factory de errores**
+  - [ ] `errors.py` ≤ 100 líneas
+  - [ ] Matriz de 8 errores preservada intacta
+
+- [ ] **T36: Eliminar get_settings_from_values duplicado en config.py**
+  - [ ] `config.py` ≤ 100 líneas
+  - [ ] `get_settings_from_values` eliminado; `main.py` usa `get_settings`
+
+- [ ] **T37: Inline _find_existing en audit_log_service.py**
+  - [ ] `audit_log_service.py` ≤ 100 líneas
+
+- [ ] **T38: Extraer _normalize_domain_instance en domain/models.py**
+  - [ ] `domain/models.py` ≤ 100 líneas
+  - [ ] Normalización (UTC, ms, `None → {}`) conservada
+
+- [ ] **T39: Comprimir auth.py, schemas.py, exception_handlers.py**
+  - [ ] `auth.py` ≤ 100 líneas
+  - [ ] `schemas.py` ≤ 100 líneas
+  - [ ] `exception_handlers.py` ≤ 100 líneas
+  - [ ] Sigue sin emitir `422`
+
+### Fase 9.2 — Tests: archivos > 100 líneas
+
+- [ ] **T40: Dividir test_middleware.py (371 líneas) en 4 archivos**
+  - [ ] Cada archivo ≤ 60 líneas
+  - [ ] Comportamiento idéntico al original
+
+- [ ] **T41: Dividir test_main.py (361 líneas) en 3 archivos**
+  - [ ] Cada archivo ≤ 60 líneas
+  - [ ] Comportamiento idéntico al original
+
+- [ ] **T42: Dividir test_create_audit_log.py (246 líneas) en 3 archivos + helpers**
+  - [ ] `helpers.py` con `VALID_EVENT`, `AUTH`, `app_client()`
+  - [ ] Cada archivo ≤ 60 líneas
+
+- [ ] **T43: Dividir test_error_matrix.py (225 líneas) en 3 archivos**
+  - [ ] Cada archivo ≤ 80 líneas
+
+- [ ] **T44: Dividir test_errors.py (209 líneas) en 3 archivos**
+  - [ ] Cada archivo ≤ 70 líneas
+
+- [ ] **T45: Dividir test_consul.py (165 líneas) en 2 archivos**
+  - [ ] Cada archivo ≤ 60 líneas
+
+- [ ] **T46: Reducir fake_repository.py (103 líneas)**
+  - [ ] `fake_repository.py` ≤ 100 líneas
+
+### Fase 9.3 — Verificación final
+
+- [ ] **T47: Ejecutar suite completa y verificar cobertura**
+  - [ ] `uv run pytest --cov=app --cov-fail-under=85` pasa
+  - [ ] Sin `skip` ni `xfail`
+
+- [ ] **T48: Verificar límite de 100 líneas en todos los archivos**
+  - [ ] Cero archivos > 100 líneas en `app/` y `tests/`
+
+- [ ] **T49: Lint y formato**
+  - [ ] `uv run ruff check .` y `uv run ruff format --check .` limpios
+
+### Checkpoint: Refactorización completa
+
+- [ ] Cero archivos en `app/` y `tests/` superan las 100 líneas.
+- [ ] Suite completa verde con `--cov-fail-under=85`.
+- [ ] `ruff check` y `ruff format --check` limpios.
+- [ ] Sin cambio de comportamiento observable.
+- [ ] Revisión humana antes de cerrar.
