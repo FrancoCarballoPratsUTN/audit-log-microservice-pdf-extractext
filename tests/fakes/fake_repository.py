@@ -1,8 +1,4 @@
-"""Doble de test en memoria para `AuditLogRepository`.
-
-Sigue KISS: almacenamiento en lista, orden estable, contador de llamadas y
-barreras de error configurables. Se usa en los tests de servicio y de protocolo.
-"""
+"""Doble en memoria de `AuditLogRepository`."""
 
 from __future__ import annotations
 
