@@ -425,9 +425,9 @@
   - [x] `errors.py` ≤ 100 líneas (97)
   - [x] Matriz de 8 errores preservada intacta
 
-- [ ] **T36: Eliminar get_settings_from_values duplicado en config.py**
-  - [ ] `config.py` ≤ 100 líneas
-  - [ ] `get_settings_from_values` eliminado; `main.py` usa `get_settings`
+- [x] **T36: Eliminar get_settings_from_values duplicado en config.py**
+  - [x] `config.py` ≤ 100 líneas (84)
+  - [x] `get_settings_from_values` eliminado; `main.py` usa `get_settings`
 
 - [ ] **T37: Inline _find_existing en audit_log_service.py**
   - [ ] `audit_log_service.py` ≤ 100 líneas

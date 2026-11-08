@@ -1,13 +1,7 @@
-"""Configuración del servicio.
+"""Configuración del servicio: se lee una vez al arrancar del entorno.
 
-Se lee una vez, al arrancar, del entorno. `SERVICE_API_TOKEN` no tiene default a
-propósito: sin él el servicio se niega a arrancar (SPEC §3.6), lo que convierte un
-orquestador mal configurado en un fallo de arranque ruidoso en vez de una
-auditoría que deja de crecer en silencio (SPEC §2.5 H5).
-
-El token es un `SecretStr`, así que no puede filtrarse por un `repr` ni por un
-`logger.info("%s", settings)` perdido por el camino. Esa garantía es la razón
-del tipo, no decoración.
+`SERVICE_API_TOKEN` no tiene default: sin él el servicio se niega a arrancar
+(SPEC §3.6). El token es `SecretStr` para que nunca filtre por `repr` ni logs.
 """
 
 from collections.abc import Mapping
@@ -45,11 +39,7 @@ class Settings(BaseSettings):
     @field_validator("service_api_token")
     @classmethod
     def reject_blank_token(cls, token: SecretStr) -> SecretStr:
-        """Tratar como ausente un token formado sólo por espacios.
-
-        El mensaje nombra la variable y nunca su valor: este error se imprime
-        entero cuando el servicio se niega a arrancar.
-        """
+        """Tratar como ausente un token formado sólo por espacios."""
         if not token.get_secret_value().strip():
             raise ValueError(
                 "service_api_token must not be empty: generate one with "
@@ -72,12 +62,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_related_limits(self) -> Self:
-        """Las parejas de límites deben ser coherentes entre sí.
-
-        Estas reglas no caben en un `Field(...)`: dependen de dos variables. El
-        mensaje nombra ambas y sus valores, porque es lo único que verá el
-        operador cuando el servicio se niega a arrancar.
-        """
+        """Las parejas de límites deben ser coherentes entre sí."""
         if self.default_limit > self.max_limit:
             raise ValueError(
                 "default_limit must be less than or equal to max_limit "
@@ -93,24 +78,20 @@ class Settings(BaseSettings):
 
 
 def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
-    """Construir la configuración.
+    """Construir la configuración desde el entorno (o un Mapping para tests).
 
-    Se invoca desde la fábrica de la app, nunca a nivel de módulo: importar este
-    módulo no debe exigir un entorno.
+    Nunca se llama a nivel de módulo: importar `app.config` no exige entorno.
 
     Args:
-        environ: Entorno explícito del que leer, para los tests. Si se omite se
-            leen el entorno del proceso y el fichero `.env`; si se aporta, el
-            fichero `.env` se ignora, para que un test no dependa de la
-            configuración local del que lo ejecute.
+        environ: Variables de entorno explícitas. Si se omite, se leen
+            `os.environ` y `.env`; si se aporta, se ignora `.env`.
 
     Returns:
         La configuración validada.
 
     Raises:
-        ValidationError: Si falta el token o está en blanco, si un límite no es
-            un número positivo, o si una pareja de límites es incoherente:
-            `default_limit > max_limit` o `max_details_bytes > max_body_bytes`.
+        ValidationError: Si falta el token, un límite no es positivo, o una
+            pareja de límites es incoherente.
     """
     if environ is None:
         return Settings()
@@ -118,8 +99,3 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
         _env_file=None,
         **{key.lower(): value for key, value in environ.items()},
     )
-
-
-def get_settings_from_values(values: Mapping[str, str]) -> Settings:
-    """Build settings from a validated external source such as Consul KV."""
-    return get_settings(values)

@@ -16,7 +16,7 @@ import os
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from app.config import Settings, get_settings, get_settings_from_values
+from app.config import Settings, get_settings
 
 TOKEN = "s3cr3t-shared-token"
 BASE_ENVIRON = {"SERVICE_API_TOKEN": TOKEN}
@@ -182,7 +182,7 @@ def test_non_string_log_level_is_left_to_pydantic() -> None:
 
 
 def test_settings_are_built_from_external_values() -> None:
-    settings = get_settings_from_values({**BASE_ENVIRON, "MAX_LIMIT": "25"})
+    settings = get_settings({**BASE_ENVIRON, "MAX_LIMIT": "25"})
 
     assert settings.max_limit == 25
 

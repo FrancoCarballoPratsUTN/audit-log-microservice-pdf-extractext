@@ -8,7 +8,7 @@ import os
 import socket
 from typing import Any
 
-from app.config import Settings, get_settings, get_settings_from_values
+from app.config import Settings, get_settings
 from app.consul import load_prefix
 
 
@@ -22,7 +22,7 @@ def settings_from_environment_or_consul() -> Settings:
         os.getenv("CONSUL_KV_PREFIX", ""),
         ca_file=os.getenv("CONSUL_HTTP_CA_FILE"),
     )
-    return get_settings_from_values(values)
+    return get_settings(values)
 
 
 def consul_registration() -> dict[str, Any] | None:
