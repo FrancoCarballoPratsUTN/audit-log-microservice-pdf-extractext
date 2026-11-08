@@ -432,9 +432,9 @@
 - [x] **T37: Inline _find_existing en audit_log_service.py**
   - [x] `audit_log_service.py` ≤ 100 líneas (61)
 
-- [ ] **T38: Extraer _normalize_domain_instance en domain/models.py**
-  - [ ] `domain/models.py` ≤ 100 líneas
-  - [ ] Normalización (UTC, ms, `None → {}`) conservada
+- [x] **T38: Extraer _normalize_domain_instance en domain/models.py**
+  - [x] `domain/models.py` ≤ 100 líneas (78)
+  - [x] Normalización (UTC, ms, `None → {}`) conservada
 
 - [ ] **T39: Comprimir auth.py, schemas.py, exception_handlers.py**
   - [ ] `auth.py` ≤ 100 líneas
