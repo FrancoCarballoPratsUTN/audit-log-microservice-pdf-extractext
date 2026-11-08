@@ -9,9 +9,9 @@ La comparación es `secrets.compare_digest` porque `==` sobre strings corta en e
 primer byte distinto, y el tiempo que tarda filtraría cuántos caracteres
 iniciales son correctos.
 
-`/health` y `/readyz` quedan abiertas: los sondeos de la plataforma no pueden
-llevar credenciales, y un servicio que responde `401` a su propio chequeo de
-vivacidad es un servicio al que matan.
+`/health`, `/readyz`, `/docs` y `/openapi.json` quedan abiertas: los sondeos no
+pueden llevar credenciales y la documentación no expone datos; un servicio que
+responde `401` a su propio chequeo de vivacidad es un servicio al que matan.
 """
 
 import ast
@@ -26,6 +26,7 @@ from app.api.auth import PUBLIC_PATHS, BearerAuthMiddleware, is_authorized
 from app.api.exception_handlers import register_exception_handlers
 
 TOKEN = "s3cr3t-shared-token"
+PUBLIC_ENDPOINTS = ["/health", "/readyz", "/docs", "/openapi.json"]
 
 UNAUTHORIZED_CASES = [
     pytest.param({}, id="sin cabecera"),
@@ -143,13 +144,15 @@ def test_the_token_value_is_compared_case_sensitively(client: TestClient) -> Non
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("path", ["/health", "/readyz"])
-def test_probes_answer_without_credentials(client: TestClient, path: str) -> None:
+@pytest.mark.parametrize("path", PUBLIC_ENDPOINTS)
+def test_public_paths_answer_without_credentials(
+    client: TestClient, path: str
+) -> None:
     assert client.get(path).status_code == 200
 
 
-@pytest.mark.parametrize("path", ["/health", "/readyz"])
-def test_probes_are_declared_public(client: TestClient, path: str) -> None:
+@pytest.mark.parametrize("path", PUBLIC_ENDPOINTS)
+def test_public_paths_are_declared(client: TestClient, path: str) -> None:
     assert path in PUBLIC_PATHS
 
 

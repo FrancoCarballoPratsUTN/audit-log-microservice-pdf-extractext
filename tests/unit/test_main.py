@@ -19,6 +19,7 @@ para ejecutarse antes del enrutado, del `415` y del `413` (SPEC §4.3).
 import importlib
 import logging
 import signal
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -258,3 +259,10 @@ async def test_lifespan_builds_the_collection_once(
         pass
 
     assert built == [collection]
+
+
+def test_the_container_disables_uvicorns_access_log() -> None:
+    """El access log propio ya registra cada petición; uvicorn no debe duplicarlo."""
+    dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile"
+
+    assert "--no-access-log" in dockerfile.read_text(encoding="utf-8")

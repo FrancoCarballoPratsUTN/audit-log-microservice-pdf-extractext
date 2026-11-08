@@ -301,11 +301,11 @@
   - [x] La configuración de Traefik incluye `buffering.maxRequestBodyBytes`
   - [x] La documentación explica el comportamiento para clientes chunked/HTTP/2 sin longitud
 
-- [ ] **T27: Access log único y documentación usable** · H-14
-  - [ ] Cada petición produce una sola línea de access log
-  - [ ] `/docs` y `/openapi.json` cargan sin token; `/audit/logs` sigue devolviendo `401`
-  - [ ] El `CMD` del Dockerfile incluye `--no-access-log`
-  - [ ] La documentación explica que la UI y el esquema son públicos por diseño, pero los datos no
+- [x] **T27: Access log único y documentación usable** · H-14
+  - [x] Cada petición produce una sola línea de access log
+  - [x] `/docs` y `/openapi.json` cargan sin token; `/audit/logs` sigue devolviendo `401`
+  - [x] El `CMD` del Dockerfile incluye `--no-access-log`
+  - [x] La documentación explica que la UI y el esquema son públicos por diseño, pero los datos no
 
 ### Checkpoint B1 — Configuración y dominio
 - [ ] `U` verde.

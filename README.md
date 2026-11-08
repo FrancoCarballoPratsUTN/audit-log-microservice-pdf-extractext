@@ -39,7 +39,7 @@ por defecto**: sin él el servicio se niega a arrancar.
 
 ```bash
 uv sync
-uv run uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8083
+uv run uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8083 --no-access-log
 ```
 
 `--factory` es necesario: la configuración se resuelve en el `lifespan`, así que
@@ -184,7 +184,9 @@ audit-log-microservice-pdf-extractext/
 
 ## Contrato
 
-Todas las rutas salvo las sondas requieren `Authorization: Bearer <token>`.
+Las rutas de datos requieren `Authorization: Bearer <token>`. Son públicas
+`/health`, `/readyz`, `/docs` y `/openapi.json`: las sondas no pueden llevar
+credenciales y la documentación no expone datos de auditoría.
 
 | Verbo | Ruta | Éxito | Notas |
 |---|---|---|---|

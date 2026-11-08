@@ -27,7 +27,8 @@ from app.errors import UnauthorizedError
 logger = logging.getLogger(__name__)
 
 SCHEME = "Bearer"
-PUBLIC_PATHS = frozenset({"/health", "/readyz"})
+#documentación: no exponen datos de auditoría.
+PUBLIC_PATHS = frozenset({"/health", "/readyz", "/docs", "/openapi.json"})
 
 # Sólo documentación: el candado `Bearer` que /docs necesita para enviar el token
 # y el esquema de seguridad que `/openapi.json` publica. La autorización real la

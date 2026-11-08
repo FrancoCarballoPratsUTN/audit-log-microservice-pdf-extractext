@@ -345,11 +345,14 @@ def test_the_access_log_records_method_path_status_and_duration(
     with caplog.at_level(logging.INFO, logger="app.api.middleware"):
         client.get("/health")
 
-    messages = [record.getMessage() for record in caplog.records]
-    assert any(
-        "GET /health" in message and "200" in message and "ms" in message
-        for message in messages
-    )
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if "GET /health" in record.getMessage()
+    ]
+    assert len(messages) == 1
+    assert "200" in messages[0]
+    assert "ms" in messages[0]
 
 
 def test_the_access_log_carries_the_request_id(
