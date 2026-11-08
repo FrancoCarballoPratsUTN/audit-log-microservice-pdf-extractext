@@ -101,7 +101,14 @@ async def create_audit_log(
         PayloadTooLargeError: Si `details` serializado supera el límite del
             despliegue. Se lanza antes de llamar al servicio: nada se escribe.
     """
-    details: Any = {} if event.details is None else event.details
+    audit_log = CreateAuditLogRequest(
+        action=event.action,
+        entity_type=event.entity_type,
+        checksum=event.checksum,
+        performed_at=event.performed_at,
+        details=event.details,
+    )
+    details = audit_log.details
     settings = request.app.state.settings
 
     try:
@@ -116,15 +123,7 @@ async def create_audit_log(
     if len(encoded_details) > settings.max_details_bytes:
         raise PayloadTooLargeError()
 
-    result = await service.create(
-        CreateAuditLogRequest(
-            action=event.action,
-            entity_type=event.entity_type,
-            checksum=event.checksum,
-            performed_at=event.performed_at,
-            details=details,
-        )
-    )
+    result = await service.create(audit_log)
 
     headers = {"Location": LOCATION_PREFIX + quote(result.log.checksum, safe="")}
     if result.replay:

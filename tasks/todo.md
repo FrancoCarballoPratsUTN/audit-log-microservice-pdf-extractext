@@ -322,11 +322,11 @@
 
 ## Phase 8: Remediación — Limpieza
 
-- [ ] **T28: Unificar renderizado y normalización de `details`** · H-15a
-  - [ ] Escritura y lectura usan el mismo formateador de 7 campos
-  - [ ] El formato RFC 3339 con `Z` y ms no cambia
-  - [ ] `details` se normaliza en un solo sitio y las ramas `details is None` inalcanzables desaparecen
-  - [ ] El tipo declarado refleja lo que realmente se acepta (`Any`/`JsonValue`, no `dict`)
+- [x] **T28: Unificar renderizado y normalización de `details`** · H-15a
+  - [x] Escritura y lectura usan el mismo formateador de 7 campos
+  - [x] El formato RFC 3339 con `Z` y ms no cambia
+  - [x] `details` se normaliza en un solo sitio y las ramas `details is None` inalcanzables desaparecen
+  - [x] El tipo declarado refleja lo que realmente se acepta (`Any`/`JsonValue`, no `dict`)
 
 - [ ] **T29: Eliminar código muerto y duplicados** · H-15b
   - [ ] No queda `render`, `count`, `seed` ni `count_error` sin uso

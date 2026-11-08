@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -28,12 +29,16 @@ def _to_millis(value: datetime) -> datetime:
     return utc.replace(microsecond=(utc.microsecond // 1000) * 1000)
 
 
+def _normalize_details(details: Any) -> Any:
+    """`details` ausente es `{}`; cualquier otro valor se conserva."""
+    return {} if details is None else details
+
+
 def rfc3339_utc(value: datetime) -> str:
     """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos.
 
-    Es la representación que parsea `time.Time` del orquestador (§2.4). Como la
-    necesitan la Capa 1 (`AuditLogResponse.from_log`) y la Capa 3
-    (`serialization.render`), vive aquí, en la capa que ambas ven, para que un
+    Es la representación que parsea `time.Time` del orquestador (§2.4). La usan
+    `to_wire_fields` (Capa 1) y `serialization.render` (Capa 3), para que un
     solo formato llegue al cable.
     """
     utc = value.astimezone(UTC)
@@ -57,11 +62,12 @@ class CreateAuditLogRequest:
     entity_type: str
     checksum: str
     performed_at: datetime
-    details: dict[str, object] = field(default_factory=dict)
+    details: Any = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Usamos object.__setattr__ porque el dataclass es frozen
         object.__setattr__(self, "performed_at", _to_millis(self.performed_at))
+        object.__setattr__(self, "details", _normalize_details(self.details))
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,14 +94,26 @@ class AuditLog:
     checksum: str
     performed_at: datetime
     received_at: datetime
-    details: dict[str, object] = field(default_factory=dict)
+    details: Any = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Usamos object.__setattr__ porque el dataclass es frozen
         object.__setattr__(self, "performed_at", _to_millis(self.performed_at))
         object.__setattr__(self, "received_at", _to_millis(self.received_at))
-        if self.details is None:
-            object.__setattr__(self, "details", {})
+        object.__setattr__(self, "details", _normalize_details(self.details))
 
 
-__all__ = ["AuditLog", "CreateAuditLogRequest", "rfc3339_utc"]
+def to_wire_fields(log: AuditLog) -> dict[str, Any]:
+    """Los siete campos que comparten la escritura y la lectura."""
+    return {
+        "_id": log.id,
+        "action": log.action,
+        "entity_type": log.entity_type,
+        "checksum": log.checksum,
+        "details": log.details,
+        "performed_at": rfc3339_utc(log.performed_at),
+        "received_at": rfc3339_utc(log.received_at),
+    }
+
+
+__all__ = ["AuditLog", "CreateAuditLogRequest", "rfc3339_utc", "to_wire_fields"]

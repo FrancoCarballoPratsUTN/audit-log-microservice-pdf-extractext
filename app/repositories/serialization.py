@@ -39,7 +39,7 @@ def to_document(
         "action": request.action,
         "entity_type": request.entity_type,
         "checksum": request.checksum,
-        "details": {} if request.details is None else request.details,
+        "details": request.details,
         "performed_at": request.performed_at,
         "received_at": received_at,
     }
@@ -58,7 +58,6 @@ def to_audit_log(document: Mapping[str, Any]) -> AuditLog:
     Returns:
         El registro con `id` en hex y fechas UTC con precisión de ms.
     """
-    details = document.get("details")
     return AuditLog(
         id=str(document["_id"]),
         action=document["action"],
@@ -66,7 +65,7 @@ def to_audit_log(document: Mapping[str, Any]) -> AuditLog:
         checksum=document["checksum"],
         performed_at=document["performed_at"],
         received_at=document["received_at"],
-        details={} if details is None else details,
+        details=document.get("details"),
     )
 
 

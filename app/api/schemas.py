@@ -8,14 +8,14 @@ queda vacío y el orquestador ve un log de auditoría sin identidad y sin error
 `performed_at` y `received_at` son `str` a propósito. RFC 3339 con `Z` y
 milisegundos no es lo que Pydantic emite para un `datetime`, y el render tiene
 que llegar a Go byte a byte; el formateo lo aporta
-`app/domain.models.rfc3339_utc`, la misma primitiva que usa Capa 3.
+`app/domain.models.to_wire_fields`, compartido por escritura y lectura.
 """
 
 from typing import Any
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from app.domain.models import AuditLog, rfc3339_utc
+from app.domain.models import AuditLog, to_wire_fields
 
 
 class AuditEventRequest(BaseModel):
@@ -34,31 +34,6 @@ class AuditEventRequest(BaseModel):
     checksum: str = Field(min_length=1)
     details: Any = None
     performed_at: AwareDatetime
-
-
-def _log_fields(log: AuditLog) -> dict[str, Any]:
-    """Los siete campos de `models.AuditLog` con el formato de SPEC §2.4.
-
-    Compartido por la respuesta de escritura y por la de lectura: si cada una
-    formateara por su cuenta, los dos `GET` y el `POST` podrían llegar al
-    cable con formatos distintos que el orquestador acepta a ratos.
-
-    Args:
-        log: El registro de dominio a serializar.
-
-    Returns:
-        Los siete campos listos para construir el modelo, con `_id` en hex y
-        fechas RFC 3339 UTC con `Z`.
-    """
-    return {
-        "id": log.id,
-        "action": log.action,
-        "entity_type": log.entity_type,
-        "checksum": log.checksum,
-        "details": log.details,
-        "performed_at": rfc3339_utc(log.performed_at),
-        "received_at": rfc3339_utc(log.received_at),
-    }
 
 
 class AuditLogItem(BaseModel):
@@ -89,7 +64,7 @@ class AuditLogItem(BaseModel):
         Returns:
             El cuerpo a serializar con `_id` y fechas UTC.
         """
-        return cls(**_log_fields(log))
+        return cls(**to_wire_fields(log))
 
 
 class AuditLogResponse(AuditLogItem):
@@ -105,9 +80,8 @@ class AuditLogResponse(AuditLogItem):
     def from_log(cls, log: AuditLog, *, replay: bool = False) -> AuditLogResponse:
         """Construir la respuesta desde el registro de dominio.
 
-        La Capa 1 no conoce Capa 3, así que no puede usar `render`: formatea
-        aquí con la misma primitiva (`rfc3339_utc`) para que un solo formato
-        llegue al cable.
+        Comparte con la lectura `to_wire_fields`, el único formateador de los
+        siete campos del contrato.
 
         Args:
             log: El registro persistido, o el de un replay.
@@ -117,7 +91,7 @@ class AuditLogResponse(AuditLogItem):
         Returns:
             El cuerpo a serializar con `_id`, fechas UTC y el flag de replay.
         """
-        return cls(**_log_fields(log), idempotent_replay=replay)
+        return cls(**to_wire_fields(log), idempotent_replay=replay)
 
 
 class ProblemDetails(BaseModel):

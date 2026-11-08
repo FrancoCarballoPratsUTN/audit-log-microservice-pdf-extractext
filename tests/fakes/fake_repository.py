@@ -55,7 +55,7 @@ class FakeAuditLogRepository:
             checksum=request.checksum,
             performed_at=request.performed_at,
             received_at=received_at,
-            details=request.details or {},
+            details=request.details,
         )
         self._items.append(audit_log)
         return audit_log

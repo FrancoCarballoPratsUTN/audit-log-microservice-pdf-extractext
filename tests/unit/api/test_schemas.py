@@ -19,7 +19,12 @@ import pytest
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
-from app.api.schemas import AuditEventRequest, AuditLogResponse, ProblemDetails
+from app.api.schemas import (
+    AuditEventRequest,
+    AuditLogItem,
+    AuditLogResponse,
+    ProblemDetails,
+)
 from app.domain.models import AuditLog
 
 VALID_EVENT = {
@@ -152,10 +157,8 @@ def test_response_defaults_to_a_non_replayed_creation() -> None:
     assert AuditLogResponse(**payload).idempotent_replay is False
 
 
-def test_response_from_log_renders_dates_and_id_like_the_repository() -> None:
-    """El router construye la respuesta desde el dominio; el alias `_id`, las
-    fechas RFC 3339 con `Z` y el campo extra tienen que salir byte a byte como
-    en `render` de Capa 3, para que un solo formato llegue al cable."""
+def test_read_and_write_from_log_use_the_same_wire_fields() -> None:
+    """Los dos `GET` y el `POST` comparten el formateador de siete campos."""
     log = AuditLog(
         id="6f1c9a2b3d4e5f60718293a4",
         action="pdf.extract",
@@ -166,12 +169,14 @@ def test_response_from_log_renders_dates_and_id_like_the_repository() -> None:
         details={"page_count": 12},
     )
 
-    serialized = AuditLogResponse.from_log(log).model_dump(by_alias=True)
+    item = AuditLogItem.from_log(log).model_dump(by_alias=True)
+    response = AuditLogResponse.from_log(log).model_dump(by_alias=True)
 
-    assert serialized["_id"] == "6f1c9a2b3d4e5f60718293a4"
-    assert serialized["performed_at"] == "2026-10-05T12:34:56.789Z"
-    assert serialized["received_at"] == "2026-10-05T12:34:57.041Z"
-    assert serialized["idempotent_replay"] is False
+    assert item == {key: response[key] for key in item}
+    assert item["_id"] == "6f1c9a2b3d4e5f60718293a4"
+    assert item["performed_at"] == "2026-10-05T12:34:56.789Z"
+    assert item["received_at"] == "2026-10-05T12:34:57.041Z"
+    assert response["idempotent_replay"] is False
 
 
 def test_response_from_log_marks_a_replay() -> None:
