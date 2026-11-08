@@ -4,11 +4,12 @@
 > dependencias) está en [`plan.md`](./plan.md); el diseño en
 > [`../SPEC.md`](../SPEC.md).
 >
-> **Estado:** 16/16 tareas originales. T7–T16 cerradas y verificadas (380 tests,
-> 100 % de cobertura de `app/`); Core slice, las dos lecturas, el endurecimiento
-> del transporte, la matriz de errores y el OpenAPI implementados.
+> **Estado:** 16/16 tareas originales. T7–T16 cerradas y verificadas; suite
+> completa 458 tests, 100 % de cobertura de `app/`; Core slice, las dos lecturas,
+> el endurecimiento del transporte, la matriz de errores y el OpenAPI
+> implementados.
 >
-> **Remediación post code review:** 3/13 tareas (T17–T29); ver Fases 6–8.
+> **Remediación post code review:** 13/13 tareas (T17–T29); ver Fases 6–8.
 
 ---
 
@@ -335,11 +336,11 @@
   - [x] La suite sigue verde y sin pérdida de cobertura
 
 ### Checkpoint C — Cierre
-- [ ] `U` verde.
-- [ ] `L` verde.
-- [ ] Cobertura igual o superior al 100 % actual.
-- [ ] `I` ejecutado con Mongo real.
-- [ ] Revisión final contra la matriz H-01…H-17.
+- [x] `U` verde.
+- [x] `L` verde.
+- [x] Cobertura igual o superior al 100 % actual.
+- [x] `I` ejecutado con Mongo real.
+- [x] Revisión final contra la matriz H-01…H-17.
 
 ---
 

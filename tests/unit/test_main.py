@@ -28,7 +28,12 @@ from pydantic import ValidationError
 from app.api.auth import BearerAuthMiddleware
 from app.config import Settings
 from app.errors import ServiceError
-from app.main import create_app, lifespan
+from app.main import (
+    _consul_registration,
+    _settings_from_environment_or_consul,
+    create_app,
+    lifespan,
+)
 from tests.fakes.fake_mongo import WorkingClient, WorkingCollection
 
 TOKEN = "s3cr3t-shared-token"
@@ -234,6 +239,94 @@ async def test_shutdown_deregisters_consul_and_closes_the_client_once(
 
     assert calls == ["register", "deregister"]
     assert client.close_calls == 1
+
+
+def test_consul_configuration_is_loaded_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CONSUL_ENABLED", "true")
+    monkeypatch.setenv("CONSUL_HTTP_ADDR", "http://consul:8500")
+    monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")
+    monkeypatch.setenv("CONSUL_KV_PREFIX", "app/auditlog")
+    monkeypatch.setattr(
+        "app.main.load_prefix",
+        lambda *_args, **_kwargs: {"SERVICE_API_TOKEN": TOKEN},
+    )
+
+    settings = _settings_from_environment_or_consul()
+
+    assert settings.service_api_token.get_secret_value() == TOKEN
+
+
+def test_consul_registration_builds_the_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CONSUL_ENABLED", "true")
+    monkeypatch.setenv("CONSUL_HTTP_ADDR", "http://consul:8500")
+    monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")
+    monkeypatch.setenv("CONSUL_SERVICE_ADDRESS", "auditlog-1")
+    monkeypatch.setenv("CONSUL_SERVICE_PORT", "9000")
+    monkeypatch.setenv("CONSUL_SERVICE_NAME", "auditlog")
+    monkeypatch.setenv("CONSUL_SERVICE_ID", "auditlog-1")
+    monkeypatch.setenv("CONSUL_SERVICE_TAGS", "security-headers@file; ;audit-cb@file")
+    monkeypatch.delenv("CONSUL_HTTP_CA_FILE", raising=False)
+
+    assert _consul_registration() == {
+        "address": "http://consul:8500",
+        "token": "consul-token",
+        "ca_file": None,
+        "service_id": "auditlog-1",
+        "service_name": "auditlog",
+        "service_address": "auditlog-1",
+        "service_port": 9000,
+        "check_url": "http://auditlog-1:9000/readyz",
+        "tags": ["security-headers@file", "audit-cb@file"],
+    }
+
+
+async def test_deregistration_failure_is_logged_and_shutdown_continues(
+    configured: None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = create_app()
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        async def close(self) -> None:
+            self.close_calls += 1
+
+    client = RecordingClient()
+
+    async def noop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.main._consul_registration",
+        lambda: {
+            "address": "http://consul:8500",
+            "token": "consul-token",
+            "ca_file": None,
+            "service_id": "auditlog-1",
+        },
+    )
+    monkeypatch.setattr("app.main.open_client", lambda _settings: client)
+    monkeypatch.setattr("app.main.audit_logs_collection", lambda *_args: object())
+    monkeypatch.setattr("app.main.ReadinessProbe", lambda *_args, **_kwargs: noop)
+    monkeypatch.setattr("app.main.register_service", lambda **_kwargs: None)
+
+    def fail_deregister(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("consul down")
+
+    monkeypatch.setattr("app.main.deregister_service", fail_deregister)
+
+    async with lifespan(app):
+        pass
+
+    assert client.close_calls == 1
+    assert "Consul service deregistration failed." in caplog.text
 
 
 async def test_lifespan_builds_the_collection_once(

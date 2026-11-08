@@ -16,10 +16,18 @@ import os
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, get_settings_from_values
 
 TOKEN = "s3cr3t-shared-token"
 BASE_ENVIRON = {"SERVICE_API_TOKEN": TOKEN}
+
+
+@pytest.fixture(autouse=True)
+def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aislar los defaults del entorno real que ejecuta la suite."""
+    for variable in Settings.model_fields:
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 def build_settings(**overrides: object) -> Settings:
@@ -166,6 +174,17 @@ def test_equal_cross_limits_are_allowed() -> None:
 
 def test_log_level_is_normalized_to_uppercase() -> None:
     assert build_settings(log_level="debug").log_level == "DEBUG"
+
+
+def test_non_string_log_level_is_left_to_pydantic() -> None:
+    """El validador sólo normaliza strings; el resto lo rechaza Pydantic."""
+    assert Settings.normalize_log_level(123) == 123
+
+
+def test_settings_are_built_from_external_values() -> None:
+    settings = get_settings_from_values({**BASE_ENVIRON, "MAX_LIMIT": "25"})
+
+    assert settings.max_limit == 25
 
 
 def test_invalid_log_level_is_rejected() -> None:
