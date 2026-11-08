@@ -66,8 +66,7 @@ class Settings(BaseSettings):
         level = value.strip().upper()
         if level not in LOG_LEVELS:
             raise ValueError(
-                f"log_level must be one of {', '.join(LOG_LEVELS)} "
-                f"(got {value!r})"
+                f"log_level must be one of {', '.join(LOG_LEVELS)} (got {value!r})"
             )
         return level
 

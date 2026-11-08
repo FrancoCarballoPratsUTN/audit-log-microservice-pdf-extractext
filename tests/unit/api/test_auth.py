@@ -145,9 +145,7 @@ def test_the_token_value_is_compared_case_sensitively(client: TestClient) -> Non
 
 
 @pytest.mark.parametrize("path", PUBLIC_ENDPOINTS)
-def test_public_paths_answer_without_credentials(
-    client: TestClient, path: str
-) -> None:
+def test_public_paths_answer_without_credentials(client: TestClient, path: str) -> None:
     assert client.get(path).status_code == 200
 
 

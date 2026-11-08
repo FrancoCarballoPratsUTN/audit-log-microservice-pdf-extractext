@@ -308,15 +308,15 @@
   - [x] La documentación explica que la UI y el esquema son públicos por diseño, pero los datos no
 
 ### Checkpoint B1 — Configuración y dominio
-- [ ] `U` verde.
-- [ ] `L` verde.
-- [ ] Tests de configuración inválida y normalización ms pasan.
+- [x] `U` verde.
+- [x] `L` verde.
+- [x] Tests de configuración inválida y normalización ms pasan.
 
 ### Checkpoint B2 — Seguridad y operación
-- [ ] `U` verde.
-- [ ] `L` verde.
-- [ ] Smoke: credencial no ASCII, request ID inválido, body sin longitud, `/docs` y access log único.
-- [ ] `docker build` correcto.
+- [x] `U` verde.
+- [x] `L` verde.
+- [x] Smoke: credencial no ASCII, request ID inválido, body sin longitud, `/docs` y access log único.
+- [x] `docker build` correcto.
 
 ---
 
