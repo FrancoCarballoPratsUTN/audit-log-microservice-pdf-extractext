@@ -32,6 +32,12 @@ services:
       RETENTION_DAYS: ${RETENTION_DAYS:-0}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_NAME: ${APP_NAME:-Audit Log Microservice}
+      # false => toda la configuración sale de este entorno. true => Consul KV.
+      CONSUL_ENABLED: ${CONSUL_ENABLED:-false}
+      CONSUL_HTTP_ADDR: ${CONSUL_HTTP_ADDR:-}
+      CONSUL_HTTP_TOKEN: ${CONSUL_HTTP_TOKEN:-}
+      CONSUL_HTTP_CA_FILE: ${CONSUL_HTTP_CA_FILE:-}
+      CONSUL_KV_PREFIX: ${CONSUL_KV_PREFIX:-}
     labels:
       - traefik.enable=true
       - traefik.http.routers.audit.rule=Host(`audit.universidad.localhost`)
@@ -39,6 +45,10 @@ services:
       - traefik.http.routers.audit.tls=true
       - traefik.http.services.audit.loadbalancer.server.port=8000
       - traefik.http.services.audit.loadbalancer.retry.attempts=0
+      # Healthcheck activo de Traefik: sólo enruta a réplicas con MongoDB listo.
+      - traefik.http.services.audit.loadbalancer.healthcheck.path=/readyz
+      - traefik.http.services.audit.loadbalancer.healthcheck.interval=10s
+      - traefik.http.services.audit.loadbalancer.healthcheck.timeout=3s
       - traefik.docker.network=mired
     networks:
       - mired
