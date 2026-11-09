@@ -1,4 +1,9 @@
-"""Define las operaciones que debe ofrecer el repositorio."""
+"""Puerto del repositorio (Protocol).
+
+`AuditLogRepository` como `Protocol`. Esto define el contrato entre
+la capa de servicios y la capa de acceso a datos. El
+protocolo es `runtime_checkable` para permitir comprobaciones en tests.
+"""
 
 from __future__ import annotations
 
@@ -13,13 +18,13 @@ class AuditLogRepository(Protocol):
     """Contrato para persistir y recuperar registros de auditoría."""
 
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
-        """Guarda un evento nuevo.
+        """Insertar un nuevo evento de auditoría.
 
         Args:
-            request: Petición HTTP recibida.
+            request: Datos a persistir (sin `id` ni `received_at`).
 
         Returns:
-            El registro guardado.
+            El registro persistido con su identificador y `received_at`.
         """
         ...
 
@@ -31,39 +36,31 @@ class AuditLogRepository(Protocol):
         checksum: str,
         performed_at: datetime,
     ) -> AuditLog | None:
-        """Busca un evento con la misma identidad.
+        """Buscar un evento para determinar si es un replay por identidad.
 
-        Args:
-            action: Acción realizada.
-            entity_type: Tipo de entidad afectada.
-            checksum: Valor que identifica el contenido.
-            performed_at: Fecha y hora en que ocurrió el evento.
-
-        Returns:
-            El registro encontrado o None.
+        La identidad está formada por `(action, entity_type, checksum,
+        performed_at)`. `performed_at` usa granularidad de 1 ms: el dominio lo
+        normaliza a UTC y trunca los microsegundos antes de consultar.
         """
         ...
 
     async def find_by_checksum(self, checksum: str) -> list[AuditLog]:
-        """Busca eventos por su checksum.
+        """Recuperar todos los eventos con el checksum dado.
 
-        Args:
-            checksum: Valor que identifica el contenido.
-
-        Returns:
-            La lista de registros.
+        El orden lo decide la implementación; la capa API lo normaliza si es
+        necesario para cumplir el contrato.
         """
         ...
 
     async def list(self, *, skip: int = 0, limit: int = 100) -> list[AuditLog]:
-        """Devuelve una página de eventos.
+        """Listar eventos con paginación.
 
         Args:
-            skip: Cantidad de resultados que se van a omitir.
-            limit: Cantidad máxima de resultados.
+            skip: Número de elementos a omitir.
+            limit: Número máximo de elementos a devolver.
 
         Returns:
-            La lista de registros.
+            Lista de eventos (array de primer nivel).
         """
         ...
 
@@ -79,7 +76,6 @@ class ReplayDetected(Exception):
     """
 
     def __init__(self) -> None:
-        """Crea la señal de que el evento ya existía."""
         super().__init__("the audit event is already stored")
 
 
