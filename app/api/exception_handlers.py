@@ -1,19 +1,4 @@
-"""Exception handlers: donde un fallo se convierte en una respuesta HTTP.
-
-La Capa 1 es la única que puede saber de códigos de estado. Tres
-responsabilidades:
-
-1. `RequestValidationError` se convierte en `400 VALIDATION_ERROR`. Ningún
-   camino de este módulo emite `422`: el cliente de Go loparsearía como un
-   `Problem{}` vacío y haría panic (SPEC §2.6).
-2. `ServiceError` conserva el estado, las cabeceras y el código que declara.
-3. Cualquier otra cosa se convierte en `500` sin detalle: una excepción no
-   prevista que llega al cliente como texto es una fuga.
-
-`StarletteHTTPException` no necesita inspección de causa: el enrutado responde
-404 y 405, y `str(exc)` es la frase del framework sobre la petición del
-cliente.
-"""
+"""Convierte los errores en respuestas HTTP claras."""
 
 import logging
 
@@ -41,11 +26,13 @@ HTTP_ERRORS: dict[int, type[ServiceError]] = {
 
 
 def _describe(exc: PydanticValidationError) -> str:
-    """Una frase que nombra qué falló, y nada sobre el valor enviado.
+    """Resume los campos que fallaron en una validación.
 
-    Pydantic reporta la entrada problemática en `input` e internos del validador
-    en `ctx` y `url`; se descartan, porque el valor puede ser un secreto y el
-    resto apunta dentro de la pila de validación (SPEC §7.1).
+    Args:
+        exc: Error que se está manejando.
+
+    Returns:
+        El texto con los errores encontrados.
     """
     failures = [
         f"{'.'.join(str(part) for part in failure['loc'])}: {failure['msg']}"
@@ -55,14 +42,30 @@ def _describe(exc: PydanticValidationError) -> str:
 
 
 async def service_error_handler(request: Request, exc: ServiceError) -> JSONResponse:
-    """Reportar un error de dominio con el estado que declara."""
+    """Devuelve un error del servicio con su estado HTTP.
+
+    Args:
+        request: Petición HTTP recibida.
+        exc: Error que se está manejando.
+
+    Returns:
+        La respuesta JSON del error.
+    """
     return problem_response(exc, instance=request.url.path)
 
 
 async def validation_error_handler(
     request: Request, exc: RequestValidationError | PydanticValidationError
 ) -> JSONResponse:
-    """Responder `400 VALIDATION_ERROR` en vez del `422` de FastAPI (SPEC §3.3 D1)."""
+    """Convierte un error de validación en un 400.
+
+    Args:
+        request: Petición HTTP recibida.
+        exc: Error que se está manejando.
+
+    Returns:
+        La respuesta JSON del error.
+    """
     logger.info("request validation failed on %s", request.url.path)
     return problem_response(ValidationError(_describe(exc)), instance=request.url.path)
 
@@ -70,10 +73,14 @@ async def validation_error_handler(
 async def http_exception_handler(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
-    """Traducir los 404 y 405 del propio framework a la matriz de errores.
+    """Traduce los errores HTTP de FastAPI al formato del servicio.
 
-    Cualquier otro estado se convierte en un 500 genérico: la matriz de SPEC
-    §7.2 tiene ocho filas, e inventar un noveno código divergiría el contrato.
+    Args:
+        request: Petición HTTP recibida.
+        exc: Error que se está manejando.
+
+    Returns:
+        La respuesta JSON del error.
     """
     error_class = HTTP_ERRORS.get(exc.status_code)
     if error_class is None:
@@ -87,13 +94,28 @@ async def http_exception_handler(
 async def unexpected_exception_handler(
     request: Request, exc: Exception
 ) -> JSONResponse:
-    """Último recurso: `500` con detalle genérico, causa sólo en el log."""
+    """Registra un error inesperado y devuelve un 500.
+
+    Args:
+        request: Petición HTTP recibida.
+        exc: Error que se está manejando.
+
+    Returns:
+        La respuesta JSON del error.
+    """
     logger.exception("unhandled exception on %s", request.url.path, exc_info=exc)
     return problem_response(InternalError(), instance=request.url.path)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Enganchar los handlers a `app`. Se invoca una vez, desde la fábrica."""
+    """Registra los manejadores de errores en la aplicación.
+
+    Args:
+        app: Aplicación FastAPI.
+
+    Returns:
+        No retorna valor.
+    """
     app.add_exception_handler(ServiceError, service_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

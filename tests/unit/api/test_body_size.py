@@ -1,11 +1,4 @@
-"""Rechazar con `413` un cuerpo sin tamaño declarado o por encima del límite.
-
-El microservicio tiene un límite de tamaño para las solicitudes.
-Antes de procesar los datos, revisa la cabecera Content-Length para saber cuánto
-ocupa el contenido. Si supera el límite permitido, rechaza la solicitud sin
-necesidad de cargar todo el contenido en memoria. Esto ayuda a proteger los
-recursos del sistema.
-"""
+"""Pruebas del límite de tamaño del cuerpo."""
 
 from pathlib import Path
 
@@ -21,10 +14,12 @@ MIDDLEWARE_SOURCE = (
 
 
 def build_client() -> TestClient:
+    """Crea un cliente para la aplicación de prueba."""
     return TestClient(build_app(), raise_server_exceptions=False)
 
 
 def test_body_size_is_checked_before_validation() -> None:
+    """Comprueba que el tamaño del cuerpo se revisa antes de validar."""
     client = build_client()
     response = client.post(
         "/audit/logs", headers={**AUTH, **JSON}, content=b"x" * (LIMIT + 1)
@@ -35,6 +30,7 @@ def test_body_size_is_checked_before_validation() -> None:
 
 
 def test_a_post_without_content_length_is_a_413() -> None:
+    """Comprueba que un POST sin tamaño de contenido devuelve 413."""
     client = build_client()
     request = client.build_request(
         "POST",
@@ -51,6 +47,7 @@ def test_a_post_without_content_length_is_a_413() -> None:
 
 
 def test_a_chunked_post_is_a_413() -> None:
+    """Comprueba que un POST por partes devuelve 413."""
     client = build_client()
     response = client.post(
         "/audit/logs",
@@ -75,15 +72,20 @@ def test_a_chunked_post_is_a_413() -> None:
     ids=["ausente", "vacío", "no numérico", "negativo", "cero", "válido"],
 )
 def test_content_length_is_parsed_defensively(value: str | None, expected: int) -> None:
-    """`Content-Length` ausente o ilegible cuenta como 0, no revienta."""
+    """`Content-Length` ausente o ilegible cuenta como 0, no revienta.
+
+    Args:
+        value: Valor que se va a revisar.
+        expected: Valor esperado.
+
+    Returns:
+        No retorna valor.
+    """
     assert parse_content_length(value) == expected
 
 
 def test_the_body_limit_never_reads_the_body() -> None:
-    """Esta prueba revisa directamente el código fuente del middleware.
-    Busca que no se utilicen métodos para leer el body, como .body()
-    Esto permite comprobar que el límite de tamaño se controle sin cargar
-    el contenido de la solicitud en memoria."""
+    """Esta prueba revisa directamente el código fuente del middleware."""
     source = MIDDLEWARE_SOURCE.read_text(encoding="utf-8")
 
     for reader in (".body(", ".stream(", "request.json", "request.data", ".form("):

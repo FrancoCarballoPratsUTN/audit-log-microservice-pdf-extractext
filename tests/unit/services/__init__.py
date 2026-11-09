@@ -1,1 +1,1 @@
-"""Tests de la Capa 2 (lógica de negocio)."""
+"""Pruebas unitarias de la lógica de negocio."""

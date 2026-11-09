@@ -1,4 +1,4 @@
-"""Doble en memoria de `AuditLogRepository`."""
+"""Simula el repositorio de auditorías en memoria."""
 
 from __future__ import annotations
 
@@ -20,6 +20,18 @@ class FakeAuditLogRepository:
         find_by_checksum_error: Exception | None = None,
         list_error: Exception | None = None,
     ) -> None:
+        """Crea el repositorio falso con los datos y errores indicados.
+
+        Args:
+            items: Registros iniciales del repositorio.
+            insert_error: Error que se lanzará al insertar.
+            find_replay_error: Error que se lanzará al buscar duplicados.
+            find_by_checksum_error: Error que se lanzará al buscar por checksum.
+            list_error: Error que se lanzará al listar.
+
+        Returns:
+            No retorna valor.
+        """
         self._items: list[AuditLog] = list(items or [])
         self.insert_error = insert_error
         self.find_replay_error = find_replay_error
@@ -31,7 +43,11 @@ class FakeAuditLogRepository:
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
         """Inserta un nuevo evento, asignando `id` y `received_at`.
 
-        El `id` es un UUID único; los tests no dependen de su valor.
+        Args:
+            request: Petición HTTP recibida.
+
+        Returns:
+            El registro guardado.
         """
         if self.insert_error is not None:
             raise self.insert_error
@@ -58,13 +74,31 @@ class FakeAuditLogRepository:
         checksum: str,
         performed_at: datetime,
     ) -> AuditLog | None:
-        """Busca un evento con identidad exacta."""
+        """Busca un evento con identidad exacta.
+
+        Args:
+            action: Acción realizada.
+            entity_type: Tipo de entidad afectada.
+            checksum: Valor que identifica el contenido.
+            performed_at: Fecha y hora en que ocurrió el evento.
+
+        Returns:
+            El documento encontrado o None.
+        """
         if self.find_replay_error is not None:
             raise self.find_replay_error
 
         self.find_replay_calls += 1
 
         def _matches(log: AuditLog) -> bool:
+            """Comprueba si el registro coincide con la identidad.
+
+            Args:
+                log: Registro de auditoría.
+
+            Returns:
+                True si el registro coincide; False en caso contrario.
+            """
             return (
                 log.action == action
                 and log.entity_type == entity_type
@@ -78,14 +112,29 @@ class FakeAuditLogRepository:
         return None
 
     async def find_by_checksum(self, checksum: str) -> list[AuditLog]:
-        """Filtra por checksum conservando el orden de inserción del fake."""
+        """Filtra por checksum conservando el orden de inserción del fake.
+
+        Args:
+            checksum: Valor que identifica el contenido.
+
+        Returns:
+            El documento encontrado o None.
+        """
         if self.find_by_checksum_error is not None:
             raise self.find_by_checksum_error
 
         return [log for log in self._items if log.checksum == checksum]
 
     async def list(self, *, skip: int = 0, limit: int = 100) -> list[AuditLog]:
-        """Devuelve una página ordenada por `performed_at` desc, luego por `id`."""
+        """Devuelve una página ordenada por `performed_at` desc, luego por `id`.
+
+        Args:
+            skip: Cantidad de resultados que se van a omitir.
+            limit: Cantidad máxima de resultados.
+
+        Returns:
+            La lista de registros.
+        """
         if self.list_error is not None:
             raise self.list_error
 

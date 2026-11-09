@@ -1,4 +1,4 @@
-"""Endpoints de `/audit/logs`."""
+"""Rutas para crear y consultar registros de auditoría."""
 
 from fastapi import APIRouter, Depends, Request, Security, status
 from fastapi.responses import JSONResponse
@@ -46,6 +46,16 @@ async def create_audit_log(
     event: AuditEventRequest,
     service: AuditLogService = Depends(get_audit_log_service),
 ) -> JSONResponse:
+    """Recibe un evento y lo guarda en la auditoría.
+
+    Args:
+        request: Petición HTTP recibida.
+        event: Datos del evento.
+        service: Servicio de auditoría.
+
+    Returns:
+        La respuesta HTTP con el evento guardado.
+    """
     audit_log = CreateAuditLogRequest(
         action=event.action,
         entity_type=event.entity_type,
@@ -74,6 +84,17 @@ async def list_audit_logs(
     limit: int | None = None,
     service: AuditLogService = Depends(get_audit_log_service),
 ) -> list[AuditLogItem]:
+    """Devuelve una página de registros de auditoría.
+
+    Args:
+        request: Petición HTTP recibida.
+        skip: Cantidad de resultados que se van a omitir.
+        limit: Cantidad máxima de resultados.
+        service: Servicio de auditoría.
+
+    Returns:
+        La lista de registros.
+    """
     settings = request.app.state.settings
     page_limit = settings.default_limit if limit is None else limit
 
@@ -95,5 +116,14 @@ async def list_audit_logs_by_checksum(
     checksum: str,
     service: AuditLogService = Depends(get_audit_log_service),
 ) -> list[AuditLogItem]:
+    """Devuelve los registros de un checksum.
+
+    Args:
+        checksum: Valor que identifica el contenido.
+        service: Servicio de auditoría.
+
+    Returns:
+        La lista de registros.
+    """
     logs = await service.list_by_checksum(checksum)
     return [AuditLogItem.from_log(log) for log in logs]

@@ -1,4 +1,4 @@
-"""Minimal Consul KV client used during service startup."""
+"""Lee la configuración guardada en Consul."""
 
 import base64
 import json
@@ -19,6 +19,22 @@ def load_prefix(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> dict[str, str]:
+    """Lee los valores de configuración guardados en Consul.
+
+    Args:
+        address: Dirección del servidor de Consul.
+        token: Token de acceso.
+        prefix: Prefijo de las claves en Consul.
+        timeout: Tiempo máximo de espera en segundos.
+        ca_file: Ruta del certificado de autoridad.
+
+    Returns:
+        Un diccionario con las claves y sus valores.
+
+    Raises:
+        ConsulConfigurationError: Si la dirección, el token o el prefijo no son
+            válidos, o si Consul responde con un error.
+    """
     if not address.strip() or not token.strip() or not prefix.strip():
         raise ConsulConfigurationError(
             "CONSUL_HTTP_ADDR, CONSUL_HTTP_TOKEN and CONSUL_KV_PREFIX are required"

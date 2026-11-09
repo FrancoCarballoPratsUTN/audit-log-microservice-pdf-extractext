@@ -1,11 +1,4 @@
-"""`MongoAuditLogRepository` contra un MongoDB de verdad.
-
-Los unitarios afirman el mapeo rama a rama sobre excepciones fabricadas; aquí
-se afirma lo que hace el servidor: que el `_id` es un `ObjectId` de verdad, que
-las fechas se guardan como BSON `Date`, y que el índice único de §6.3 rechaza
-la identidad repetida y ese rechazo sale como señal de replay (SPEC §5.3 y
-§6.2).
-"""
+"""Pruebas del repositorio de auditorías con MongoDB real."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -24,7 +17,14 @@ CHECKSUM = "9f86d081884c7d659a2feaa0c55ad015"
 
 
 def make_request(**overrides: object) -> CreateAuditLogRequest:
-    """Petición válida, con lo que pida el test cambiado."""
+    """Petición válida, con lo que pida el test cambiado.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     values: dict[str, object] = {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -39,8 +39,15 @@ def make_request(**overrides: object) -> CreateAuditLogRequest:
 async def test_insert_writes_an_object_id_and_bson_dates(
     clean_collection: object,
 ) -> None:
-    """§6.2 comprobado en el almacén y no en nuestra intención: si `_id`
-    guardara un string o las fechas un `str`, el índice de §6.3 ni se crearía."""
+    """Si `_id` guardara un string o las fechas un `str`, el índice de §6.3 ni se
+    crearía.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     repository = MongoAuditLogRepository(clean_collection)
 
     log = await repository.insert(make_request())
@@ -60,8 +67,14 @@ async def test_insert_writes_an_object_id_and_bson_dates(
 async def test_insert_stores_an_empty_object_when_details_are_absent(
     clean_collection: object,
 ) -> None:
-    """SPEC §6.2: en la colección no debe aparecer `null`, ni siquiera
-    transitoriamente."""
+    """En la colección no debe aparecer `null`, ni siquiera transitoriamente.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     repository = MongoAuditLogRepository(clean_collection)
 
     log = await repository.insert(make_request(details=None))
@@ -74,8 +87,15 @@ async def test_insert_stores_an_empty_object_when_details_are_absent(
 async def test_insert_stamps_received_at_close_to_now(
     clean_collection: object,
 ) -> None:
-    """`received_at` del servidor, no del evento: una petición con
-    `performed_at` viejo no debe heredar esa antigüedad."""
+    """`received_at` del servidor, no del evento: una petición con `performed_at` viejo
+    no debe heredar esa antigüedad.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     repository = MongoAuditLogRepository(clean_collection)
 
     log = await repository.insert(make_request())
@@ -86,8 +106,15 @@ async def test_insert_stamps_received_at_close_to_now(
 async def test_the_second_identical_event_signals_a_replay(
     clean_collection: object,
 ) -> None:
-    """Barrera 2 de §5.3 contra el servidor: sin el índice único este test
-    insertaría dos documentos en vez de rechazar el segundo."""
+    """Sin el índice único este test insertaría dos documentos en vez de rechazar el
+    segundo.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     repository = MongoAuditLogRepository(clean_collection)
     first = await repository.insert(make_request())
@@ -110,7 +137,14 @@ async def test_the_second_identical_event_signals_a_replay(
 
 async def test_find_replay_matches_the_exact_identity(clean_collection: object) -> None:
     """Identidad exacta de §6.3: cambia un campo y no hay replay, porque dos
-    extracciones del mismo documento en momentos distintos son dos eventos."""
+    extracciones del mismo documento en momentos distintos son dos eventos.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     repository = MongoAuditLogRepository(clean_collection)
     stored = await repository.insert(make_request())
     identity = {
@@ -136,10 +170,9 @@ async def test_find_replay_matches_the_exact_identity(clean_collection: object) 
 
 
 async def test_a_connection_failure_is_reported_as_a_storage_error() -> None:
-    """SPEC §6.4 con un fallo real de red: el driver lanza
-    `ServerSelectionTimeoutError`, y eso tiene que salir como `503` con nuestro
-    texto y sin el `host:port` del intento. Este test no necesita Mongo
-    levantado, así que también corre cuando el resto de integración se omite."""
+    """El driver lanza `ServerSelectionTimeoutError`, y eso tiene que salir como `503`
+    con nuestro texto y sin el `hos...
+    """
     client = AsyncMongoClient("mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=100")
     repository = MongoAuditLogRepository(
         client.get_database("pdf_extractext_audit_test").get_collection("audit_logs")

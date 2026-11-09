@@ -1,19 +1,4 @@
-"""Autenticación por token Bearer.
-
-Cuatro maneras de fallar, una sola respuesta. El `detail` es idéntico para una
-cabecera ausente, un valor vacío, un esquema ajeno y un valor incorrecto, a
-propósito: distinguirlos le daría a un atacante un oráculo para adivinar
-credenciales (SPEC §4.2).
-
-Es una preocupación de transporte, así que vive entera en la Capa 1.
-`AuditLogService` nunca llega a saber que existe un token. La autenticación se
-ejecuta antes del enrutado: un sondeo sin credenciales recibe `401` también
-para un path que no existe, de modo que la superficie de la API no se puede
-mapear desde fuera.
-
-`auto_error=False` para que este dependency no emita un `403` propio que
-duplicara —y contradijera— el `401` del middleware (SPEC §4.2).
-"""
+"""Comprueba el token de acceso de cada petición."""
 
 import logging
 import secrets
@@ -42,7 +27,14 @@ REASON_MISMATCH = "credential does not match"
 
 
 def extract_bearer(authorization: str | None) -> tuple[str | None, str]:
-    """Separar la cabecera `Authorization` en credencial y motivo de rechazo."""
+    """Separa la cabecera de autorización en esquema y credencial.
+
+    Args:
+        authorization: Cabecera de autorización.
+
+    Returns:
+        La credencial y el motivo de rechazo.
+    """
     if authorization is None:
         return None, REASON_MISSING
 
@@ -56,9 +48,14 @@ def extract_bearer(authorization: str | None) -> tuple[str | None, str]:
 
 
 def is_authorized(authorization: str | None, token: str) -> bool:
-    """Decidir si una petición puede continuar.
+    """Comprueba si la petición trae el token correcto.
 
-    Returns `True` sólo si el esquema es `Bearer` y la credencial coincide.
+    Args:
+        authorization: Cabecera de autorización.
+        token: Token de acceso.
+
+    Returns:
+        True si el token es válido; False en caso contrario.
     """
     credential, reason = extract_bearer(authorization)
     if credential is None:
@@ -85,7 +82,15 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Autenticar la petición, o responder `401`."""
+        """Permite la petición solo si trae un token válido.
+
+        Args:
+            request: Petición HTTP recibida.
+            call_next: Siguiente capa que procesa la petición.
+
+        Returns:
+            La respuesta de la siguiente capa o un error 401.
+        """
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 

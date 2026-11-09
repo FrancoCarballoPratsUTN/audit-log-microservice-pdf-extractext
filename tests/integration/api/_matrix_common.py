@@ -1,5 +1,4 @@
-"""Infraestructura compartida para los tests de la matriz de errores (SPEC §7.2)."""
-
+"""Datos y ayudas para probar la matriz de errores."""
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -20,25 +19,65 @@ WRITE_REJECTING_VALIDATOR = {
 
 
 def _post_valid(client: TestClient) -> Response:
+    """Envía un evento válido a la API.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     return client.post("/audit/logs", json=VALID_EVENT, headers=AUTH)
 
 
 def _post_without_token(client: TestClient) -> Response:
+    """Envía un evento sin token de acceso.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     return client.post("/audit/logs", json=VALID_EVENT)
 
 
 def _post_unknown_key(client: TestClient) -> Response:
+    """Envía un evento con un campo desconocido.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     return client.post(
         "/audit/logs", json={**VALID_EVENT, "user_id": "u-1"}, headers=AUTH
     )
 
 
 def _post_oversized_details(client: TestClient) -> Response:
+    """Envía un evento con detalles demasiado grandes.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     event = {**VALID_EVENT, "details": {"blob": "x" * 70000}}
     return client.post("/audit/logs", json=event, headers=AUTH)
 
 
 def _post_wrong_media_type(client: TestClient) -> Response:
+    """Envía el evento con un tipo de contenido incorrecto.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     return client.post(
         "/audit/logs",
         content=b"{}",
@@ -47,18 +86,50 @@ def _post_wrong_media_type(client: TestClient) -> Response:
 
 
 def _get_checksum_without_value(client: TestClient) -> Response:
+    """Pide la ruta de checksum sin indicar un valor.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        El valor solicitado.
+    """
     return client.get("/audit/logs/checksum/", headers=AUTH)
 
 
 def _put_audit_logs(client: TestClient) -> Response:
+    """Envía un método PUT a la ruta de auditorías.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        La respuesta de la API.
+    """
     return client.put("/audit/logs", json=VALID_EVENT, headers=AUTH)
 
 
 def _get_audit_logs(client: TestClient) -> Response:
+    """Pide el listado de auditorías.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        El valor solicitado.
+    """
     return client.get("/audit/logs", headers=AUTH)
 
 
 async def reject_every_write(collection: Any) -> None:
+    """Hace que toda escritura en MongoDB falle.
+
+    Args:
+        collection: Colección de MongoDB.
+
+    Returns:
+        No retorna valor.
+    """
     await collection.database.command(
         "collMod",
         COLLECTION_NAME,
@@ -68,6 +139,14 @@ async def reject_every_write(collection: Any) -> None:
 
 
 async def seed_a_corrupt_document(collection: Any) -> None:
+    """Guarda un documento corrupto en la colección.
+
+    Args:
+        collection: Colección de MongoDB.
+
+    Returns:
+        No retorna valor.
+    """
     await collection.insert_one(
         {
             "_id": ObjectId(),

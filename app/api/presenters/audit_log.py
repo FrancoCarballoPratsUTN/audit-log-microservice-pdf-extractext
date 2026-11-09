@@ -1,5 +1,4 @@
-"""Construcción de respuestas de escritura para `/audit/logs`."""
-
+"""Prepara la respuesta al guardar una auditoría."""
 from urllib.parse import quote
 
 from fastapi import status
@@ -12,7 +11,14 @@ LOCATION_PREFIX = "/audit/logs/checksum/"
 
 
 def present_create_result(result: CreateResult) -> JSONResponse:
-    """Traducir el resultado del servicio a la respuesta HTTP."""
+    """Convierte el resultado del servicio en una respuesta HTTP.
+
+    Args:
+        result: Resultado del servicio.
+
+    Returns:
+        La respuesta con el código y las cabeceras adecuadas.
+    """
     headers = {"Location": LOCATION_PREFIX + quote(result.log.checksum, safe="")}
     if result.replay:
         headers["X-Idempotent-Replay"] = "true"

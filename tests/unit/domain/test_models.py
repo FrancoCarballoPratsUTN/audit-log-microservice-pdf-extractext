@@ -1,3 +1,5 @@
+"""Pruebas de los datos del dominio."""
+
 def test_create_audit_log_request_converts_naive_datetime_to_utc() -> None:
     """Si `performed_at` no tiene zona horaria, se convierte a UTC (aware)."""
     from datetime import UTC, datetime

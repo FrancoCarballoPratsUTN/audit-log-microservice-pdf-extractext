@@ -1,1 +1,1 @@
-"""Tests de la Capa 1 (presentación)."""
+"""Pruebas unitarias de la capa HTTP."""

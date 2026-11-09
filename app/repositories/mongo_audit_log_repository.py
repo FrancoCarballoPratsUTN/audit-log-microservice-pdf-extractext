@@ -1,3 +1,5 @@
+"""Guarda y consulta auditorías en MongoDB."""
+
 from datetime import UTC, datetime
 from typing import Any
 
@@ -11,11 +13,31 @@ class MongoAuditLogRepository:
     composition root para que este módulo no conozca cliente ni configuración."""
 
     def __init__(self, collection: Any) -> None:
+        """Guarda la colección de MongoDB que usará el repositorio.
+
+        Args:
+            collection: Colección de MongoDB.
+
+        Returns:
+            No retorna valor.
+        """
         self._collection = collection
 
     @translate_pymongo_errors
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
-        """Guardar un evento nuevo, asignando `_id` y `received_at`."""
+        """Guarda un evento nuevo y devuelve el registro creado.
+
+        Args:
+            request: Petición HTTP recibida.
+
+        Returns:
+            El registro guardado con su identificador y fecha de recepción.
+
+        Raises:
+            AuditStorageError: Si MongoDB no responde.
+            PayloadTooLargeError: Si los detalles son demasiado grandes.
+            ValidationError: Si los detalles no se pueden guardar.
+        """
         document = to_document(request, received_at=datetime.now(UTC))
         await self._collection.insert_one(document)
         return to_audit_log(document)
@@ -29,7 +51,17 @@ class MongoAuditLogRepository:
         checksum: str,
         performed_at: datetime,
     ) -> AuditLog | None:
-        """Buscar un evento por su identidad para detectar replays."""
+        """Busca un evento con la misma identidad.
+
+        Args:
+            action: Acción realizada.
+            entity_type: Tipo de entidad afectada.
+            checksum: Valor que identifica el contenido.
+            performed_at: Fecha y hora en que ocurrió el evento.
+
+        Returns:
+            El registro encontrado o None.
+        """
         query = {
             "action": action,
             "entity_type": entity_type,
@@ -42,7 +74,15 @@ class MongoAuditLogRepository:
 
     @translate_pymongo_errors
     async def list(self, *, skip: int = 0, limit: int = 100) -> list[AuditLog]:
-        """Leer una página ordenada `performed_at desc, _id desc`"""
+        """Devuelve una página de eventos ordenada.
+
+        Args:
+            skip: Cantidad de resultados que se van a omitir.
+            limit: Cantidad máxima de resultados.
+
+        Returns:
+            La lista de registros.
+        """
         docs = (
             await self._collection.find({})
             .sort([("performed_at", -1), ("_id", -1)])
@@ -54,7 +94,14 @@ class MongoAuditLogRepository:
 
     @translate_pymongo_errors
     async def find_by_checksum(self, checksum: str) -> list[AuditLog]:
-        """Leer los eventos de un checksum, ordenados como el índice"""
+        """Devuelve los eventos que tienen un checksum.
+
+        Args:
+            checksum: Valor que identifica el contenido.
+
+        Returns:
+            La lista de registros coincidentes.
+        """
         cursor = self._collection.find({"checksum": checksum}).sort(
             [("performed_at", -1), ("_id", -1)]
         )

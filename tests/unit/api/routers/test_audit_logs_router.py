@@ -1,15 +1,4 @@
-"""El router `POST /audit/logs` aislado del storage.
-
-Se construye una app mínima con el router, sin lifespan ni Mongo, y se enchufa
-un servicio de juguete en `app.state` — el mismo sitio donde el composition root
-dejaría el de verdad, así que la dependencia por defecto de
-`app/api/dependencies.py` se ejecuta tal cual. Lo que se fija aquí es la
-traducción de Capa 1 que el test de integración no puede aislar: estado, `Location`,
-cabeceras de replay y el límite de `details` **antes** de llamar a la Capa 2.
-
-La persistencia real y "el documento existe en Mongo" son de
-`tests/integration/api/test_create_audit_log.py`.
-"""
+"""Pruebas del router de auditorías sin base de datos."""
 
 import json
 from datetime import UTC, datetime
@@ -49,6 +38,16 @@ def _app(
     max_details_bytes: int = 65536,
     default_limit: int = 10,
 ) -> FastAPI:
+    """Crea una aplicación de prueba con el servicio indicado.
+
+    Args:
+        service: Servicio de auditoría.
+        max_details_bytes: Tamaño máximo de los detalles.
+        default_limit: Cantidad de resultados por defecto.
+
+    Returns:
+        La aplicación de prueba.
+    """
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(audit_logs_router)
@@ -64,6 +63,14 @@ def _app(
 
 
 def _log(checksum: str = "9f86d081884c7d659a2feaa0c55ad015") -> AuditLog:
+    """Crea un registro de auditoría de prueba.
+
+    Args:
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        El registro de prueba.
+    """
     return AuditLog(
         id="6f1c9a2b3d4e5f60718293a4",
         action="pdf.extract",
@@ -85,6 +92,15 @@ class SpyingService:
         *,
         items: list[AuditLog] | None = None,
     ) -> None:
+        """Guarda el resultado y los elementos que devolverá.
+
+        Args:
+            result: Resultado del servicio.
+            items: Registros iniciales del repositorio.
+
+        Returns:
+            No retorna valor.
+        """
         self.result = result
         self.list_items = list(items or [])
         self.created: list[CreateAuditLogRequest] = []
@@ -92,6 +108,14 @@ class SpyingService:
         self.checksum_calls: list[str] = []
 
     async def create(self, request: CreateAuditLogRequest) -> CreateResult:
+        """Devuelve el resultado preparado y guarda la petición.
+
+        Args:
+            request: Petición HTTP recibida.
+
+        Returns:
+            El resultado creado.
+        """
         self.created.append(request)
         if self.result is None:
             raise AssertionError(
@@ -100,31 +124,78 @@ class SpyingService:
         return self.result
 
     async def list_page(self, *, skip: int, limit: int) -> list[AuditLog]:
+        """Devuelve los elementos preparados y guarda la paginación.
+
+        Args:
+            skip: Cantidad de resultados que se van a omitir.
+            limit: Cantidad máxima de resultados.
+
+        Returns:
+            La lista de elementos.
+        """
         self.list_calls.append((skip, limit))
         return self.list_items
 
     async def list_by_checksum(self, checksum: str) -> list[AuditLog]:
+        """Devuelve los elementos del checksum indicado.
+
+        Args:
+            checksum: Valor que identifica el contenido.
+
+        Returns:
+            La lista de elementos.
+        """
         self.checksum_calls.append(checksum)
         return self.list_items
 
 
 def _post(service: SpyingService, *payloads: dict, limit: int = 65536):
+    """Envía una petición POST de prueba.
+
+    Args:
+        service: Servicio de auditoría.
+        limit: Cantidad máxima de resultados.
+        *payloads: Argumentos adicionales.
+
+    Returns:
+        La respuesta de la API.
+    """
     client = TestClient(_app(service, max_details_bytes=limit))
     responses = [client.post("/audit/logs", json=payload) for payload in payloads]
     return responses[0] if len(responses) == 1 else responses
 
 
 def _get(service: SpyingService, *, default_limit: int = 10, **params: object):
+    """Envía una petición GET de prueba al listado.
+
+    Args:
+        service: Servicio de auditoría.
+        default_limit: Cantidad de resultados por defecto.
+        **params: Argumentos adicionales.
+
+    Returns:
+        La respuesta de la API.
+    """
     client = TestClient(_app(service, default_limit=default_limit))
     return client.get("/audit/logs", params=params)
 
 
 def _get_by_checksum(service: SpyingService, checksum: str):
+    """Envía una petición GET de prueba por checksum.
+
+    Args:
+        service: Servicio de auditoría.
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        La respuesta de la API.
+    """
     client = TestClient(_app(service))
     return client.get(f"/audit/logs/checksum/{checksum}")
 
 
 def test_a_created_event_returns_201_with_location_and_the_seven_fields() -> None:
+    """Comprueba que un evento creado devuelve 201, Location y los siete campos."""
     response = _post(SpyingService(CreateResult(_log(), replay=False)), VALID_EVENT)
 
     body = response.json()
@@ -144,6 +215,7 @@ def test_a_created_event_returns_201_with_location_and_the_seven_fields() -> Non
 
 
 def test_a_replay_returns_200_with_both_idempotent_signals() -> None:
+    """Comprueba que un duplicado devuelve 200 con ambas señales."""
     response = _post(SpyingService(CreateResult(_log(), replay=True)), VALID_EVENT)
 
     assert response.status_code == 200
@@ -156,6 +228,9 @@ def test_a_replay_returns_200_with_both_idempotent_signals() -> None:
 
 
 def test_details_over_the_limit_returns_413_without_calling_the_service() -> None:
+    """Comprueba que unos detalles demasiado grandes devuelven 413 sin llamar al
+    servicio.
+    """
     service = SpyingService(CreateResult(_log(), replay=False))
     payload = {**VALID_EVENT, "details": {"blob": "x" * 32}}
 
@@ -169,11 +244,28 @@ def test_details_over_the_limit_returns_413_without_calling_the_service() -> Non
 def test_a_recursion_error_while_serializing_details_is_400(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Un anidamiento que revienta el serializador no puede escapar como `500`."""
+    """Un anidamiento que revienta el serializador no puede escapar como `500`.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+
+    Returns:
+        No retorna valor.
+    """
     service = SpyingService(CreateResult(_log(), replay=False))
     real_dumps = json.dumps
 
     def dumps(value, *args, **kwargs):
+        """Simula un error de recursión al convertir los detalles.
+
+        Args:
+            value: Valor que se va a revisar.
+            *args: Argumentos adicionales.
+            **kwargs: Argumentos adicionales.
+
+        Returns:
+            El texto JSON.
+        """
         if isinstance(value, dict) and value.get("trigger") == "recursion":
             raise RecursionError("maximum recursion depth exceeded")
         return real_dumps(value, *args, **kwargs)
@@ -207,6 +299,15 @@ def test_a_recursion_error_while_serializing_details_is_400(
 def test_details_that_cannot_be_stored_as_bson_return_400_before_service(
     details: object,
 ) -> None:
+    """Comprueba que unos detalles no válidos para BSON devuelven 400 antes del
+    servicio.
+
+    Args:
+        details: Datos adicionales del evento.
+
+    Returns:
+        No retorna valor.
+    """
     service = SpyingService(CreateResult(_log(), replay=False))
 
     client = TestClient(_app(service))
@@ -223,6 +324,8 @@ def test_details_that_cannot_be_stored_as_bson_return_400_before_service(
 
 
 def test_excessively_nested_details_return_400_before_service() -> None:
+    """Comprueba que unos detalles demasiado anidados devuelven 400 antes del servicio.
+    """
     service = SpyingService(CreateResult(_log(), replay=False))
     details: object = "leaf"
     for _ in range(150):
@@ -242,6 +345,7 @@ def test_excessively_nested_details_return_400_before_service() -> None:
 
 
 def test_rejected_details_do_not_poison_a_later_list_response() -> None:
+    """Comprueba que unos detalles rechazados no afectan a un listado posterior."""
     service = SpyingService(CreateResult(_log(), replay=False))
     client = TestClient(_app(service))
     invalid_body = RAW_EVENT_PREFIX + '{"bad\\u0000key":"value"}}'
@@ -260,6 +364,7 @@ def test_rejected_details_do_not_poison_a_later_list_response() -> None:
 
 
 def test_details_size_limit_counts_utf8_bytes() -> None:
+    """Comprueba que el límite cuenta los bytes UTF-8."""
     details = {"text": "á" * 20}
     encoded = json.dumps(details, ensure_ascii=False, separators=(",", ":"))
     service = SpyingService(CreateResult(_log(), replay=False))
@@ -273,6 +378,9 @@ def test_details_size_limit_counts_utf8_bytes() -> None:
 
 
 def test_details_over_utf8_byte_limit_return_413_before_service() -> None:
+    """Comprueba que unos detalles por encima del límite devuelven 413 antes del
+    servicio.
+    """
     details = {"text": "á" * 20}
     encoded = json.dumps(details, ensure_ascii=False, separators=(",", ":"))
     service = SpyingService(CreateResult(_log(), replay=False))
@@ -288,6 +396,7 @@ def test_details_over_utf8_byte_limit_return_413_before_service() -> None:
 
 
 def test_absent_details_reach_the_service_as_an_empty_object() -> None:
+    """Comprueba que unos detalles ausentes llegan al servicio como objeto vacío."""
     service = SpyingService(CreateResult(_log(), replay=False))
     payload = {k: v for k, v in VALID_EVENT.items() if k != "details"}
 
@@ -298,6 +407,7 @@ def test_absent_details_reach_the_service_as_an_empty_object() -> None:
 
 
 def test_nested_details_pass_verbatim_to_the_service() -> None:
+    """Comprueba que los detalles anidados llegan sin cambios al servicio."""
     service = SpyingService(CreateResult(_log(), replay=False))
     details = {"nested": {"deep": [1, 2, {"x": None}]}}
     payload = {**VALID_EVENT, "details": details}
@@ -309,6 +419,7 @@ def test_nested_details_pass_verbatim_to_the_service() -> None:
 
 
 def test_the_location_escapes_every_character_of_the_checksum() -> None:
+    """Comprueba que la ubicación escapa todos los caracteres del checksum."""
     checksum = 'Mi-/checksum?&="raro" #mañana'
     service = SpyingService(CreateResult(_log(checksum=checksum), replay=False))
 
@@ -321,6 +432,7 @@ def test_the_location_escapes_every_character_of_the_checksum() -> None:
 
 
 def test_an_invalid_body_is_400_before_the_service() -> None:
+    """Comprueba que un cuerpo inválido devuelve 400 antes del servicio."""
     service = SpyingService(CreateResult(_log(), replay=False))
     payload = {**VALID_EVENT, "performed_at": "2026-10-05T12:34:56"}
 
@@ -332,9 +444,9 @@ def test_an_invalid_body_is_400_before_the_service() -> None:
 
 
 def test_list_returns_a_top_level_array_with_the_seven_decodable_fields() -> None:
-    """SPEC §2.4 y AC del plan: el `GET` responde un **array de primer nivel** y
-    cada elemento lleva exactamente los 7 campos de `models.AuditLog` — sin el
-    `idempotent_replay` que sólo existe en la respuesta de escritura."""
+    """El `GET` responde un **array de primer nivel** y cada elemento lleva exactamente
+    los 7 campos de `models.AuditLog` — sin e...
+    """
     service = SpyingService(items=[_log()])
 
     response = _get(service)
@@ -358,6 +470,7 @@ def test_list_returns_a_top_level_array_with_the_seven_decodable_fields() -> Non
 
 
 def test_list_forwards_skip_and_limit_to_the_service() -> None:
+    """Comprueba que el listado reenvía skip y limit al servicio."""
     service = SpyingService(items=[])
 
     response = _get(service, skip=5, limit=20)
@@ -368,7 +481,8 @@ def test_list_forwards_skip_and_limit_to_the_service() -> None:
 
 def test_list_applies_the_configured_default_limit() -> None:
     """`limit` ausente ⇒ `DEFAULT_LIMIT` del despliegue (coincide con el del
-    orquestador, SPEC `DEFAULT_LIMIT`), aplicado en la Capa 1."""
+    orquestador, SPEC `DEFAULT_LIMIT`), aplicado en la Capa 1.
+    """
     service = SpyingService(items=[])
 
     response = _get(service, default_limit=7)
@@ -382,8 +496,15 @@ def test_list_applies_the_configured_default_limit() -> None:
     [{"skip": -1}, {"skip": 10001}, {"limit": 0}, {"limit": 101}],
 )
 def test_list_rejects_out_of_range_pagination_with_400(params: dict[str, int]) -> None:
-    """SPEC §5.2: el rango se rechaza, **nunca** se recorta; `400 VALIDATION_ERROR`
-    como el body inválido, y el servicio ni se entera."""
+    """El rango se rechaza, **nunca** se recorta; `400 VALIDATION_ERROR` como el body
+    inválido, y el servicio ni se entera.
+
+    Args:
+        params: Parámetros de la consulta.
+
+    Returns:
+        No retorna valor.
+    """
     service = SpyingService(items=[])
 
     response = _get(service, **params)
@@ -394,6 +515,7 @@ def test_list_rejects_out_of_range_pagination_with_400(params: dict[str, int]) -
 
 
 def test_list_with_no_results_returns_an_empty_array() -> None:
+    """Comprueba que un listado vacío devuelve un arreglo vacío."""
     response = _get(SpyingService(items=[]))
 
     assert response.status_code == 200
@@ -401,8 +523,9 @@ def test_list_with_no_results_returns_an_empty_array() -> None:
 
 
 def test_list_by_checksum_returns_a_top_level_array_with_the_seven_fields() -> None:
-    """SPEC §8.1: el listado por checksum repite la forma de la lectura global
-    —array de primer nivel, 7 campos— sin el `idempotent_replay` de escritura."""
+    """El listado por checksum repite la forma de la lectura global —array de primer
+    nivel, 7 campos— sin el `idempotent_replay` de escritura.
+    """
     service = SpyingService(items=[_log()])
 
     response = _get_by_checksum(service, "9f86d081884c7d659a2feaa0c55ad015")
@@ -425,6 +548,7 @@ def test_list_by_checksum_returns_a_top_level_array_with_the_seven_fields() -> N
 
 
 def test_list_by_checksum_forwards_the_path_value_to_the_service() -> None:
+    """Comprueba que el listado por checksum reenvía el valor de la ruta."""
     service = SpyingService(items=[])
 
     response = _get_by_checksum(service, "abc123")

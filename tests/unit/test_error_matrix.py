@@ -1,4 +1,4 @@
-"""Matriz de errores SPEC §7.2: ocho filas, ni una más ni una menos."""
+"""Pruebas de la matriz de errores."""
 
 import pytest
 
@@ -26,6 +26,18 @@ def test_error_declares_its_wiring_metadata(
     type_uri: str,
     title: str,
 ) -> None:
+    """Comprueba que cada error declara sus datos de conexión.
+
+    Args:
+        error_class: Clase de error.
+        status: Código de estado HTTP.
+        code: Código del error.
+        type_uri: URI que identifica el tipo de error.
+        title: Título del error.
+
+    Returns:
+        No retorna valor.
+    """
     assert error_class.status == status
     assert error_class.code == code
     assert error_class.type_uri == type_uri
@@ -33,8 +45,9 @@ def test_error_declares_its_wiring_metadata(
 
 
 def test_type_uris_are_unique_across_the_matrix() -> None:
-    """`type` es el identificador del problema en RFC 9457 §3.1. Dos filas con
-    el mismo `type` serían indistinguibles para el cliente."""
+    """`type` es el identificador del problema en RFC 9457 §3.1. Dos filas con el mismo
+    `type` serían indistinguibles para el cliente.
+    """
     type_uris = [row[3] for row in SPEC_ERROR_MATRIX]
     assert len(set(type_uris)) == len(type_uris)
 

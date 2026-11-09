@@ -1,14 +1,4 @@
-"""Capa 3: cliente de MongoDB y operaciones del ciclo de vida.
-
-SPEC §6.1 usa `pymongo.AsyncMongoClient`, la API asíncrona oficial.
-Este módulo traduce las excepciones del driver a errores de dominio de
-`app/errors.py` y nunca al revés: el acceso a datos no conoce códigos HTTP
-(SPEC §6.4).
-
-Las operaciones de índice (`index_specs`, `IndexSpec`, las constantes de
-índice y `ttl_index`) viven en `app/repositories/index_specs.py`; este módulo
-las re-exporta para no romper imports existentes.
-"""
+"""Abre la conexión y prepara la base de datos."""
 
 import logging
 from typing import Any
@@ -42,11 +32,13 @@ Document = dict[str, Any]
 
 
 def open_client(settings: Settings) -> AsyncMongoClient[Document]:
-    """Abrir el cliente con el timeout del despliegue.
+    """Crea el cliente de MongoDB con el tiempo de espera configurado.
 
-    `AsyncMongoClient` no conecta en el constructor: conectar es trabajo de la
-    primera operación. Por eso abrir no puede fallar y el `ping` de §6.5 paso 3
-    es un paso aparte y no un adorno.
+    Args:
+        settings: Configuración del servicio.
+
+    Returns:
+        El cliente de MongoDB.
     """
     return AsyncMongoClient(
         settings.mongo_uri,
@@ -57,10 +49,14 @@ def open_client(settings: Settings) -> AsyncMongoClient[Document]:
 def audit_logs_collection(
     client: AsyncMongoClient[Document], settings: Settings
 ) -> Any:
-    """La colección de `audit_logs` en la base configurada.
+    """Obtiene la colección de auditorías configurada.
 
-    Se resuelve siempre por configuración y nunca por defecto: escribir en la
-    base equivocada no da error, deja datos donde nadie los busca.
+    Args:
+        client: Cliente que usa la prueba.
+        settings: Configuración del servicio.
+
+    Returns:
+        La colección de MongoDB.
     """
     return client.get_database(settings.mongo_database).get_collection(
         settings.mongo_audit_logs_collection
@@ -68,14 +64,16 @@ def audit_logs_collection(
 
 
 async def ping(client: AsyncMongoClient[Document]) -> None:
-    """Comprobar que Mongo responde, traduciendo el fallo al dominio.
+    """Comprueba que MongoDB responde.
 
-    SPEC §6.5 paso 3. El `detail` es fijo a propósito: el texto del driver suele
-    traer `host:port` y con él parte de la URI, que acaba en logs ajenos al
-    servicio.
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        No retorna valor.
 
     Raises:
-        AuditStorageError: Si el driver falla al responder.
+        AuditStorageError: Si MongoDB no responde.
     """
     try:
         await client.admin.command("ping")
@@ -84,13 +82,17 @@ async def ping(client: AsyncMongoClient[Document]) -> None:
 
 
 async def ensure_indexes(collection: Any, *, retention_days: int) -> None:
-    """Crear los índices de §6.3, incluido el TTL si la retención está activa.
+    """Crea los índices necesarios en la colección.
 
-    Es idempotente: `create_indexes` no hace nada si el índice ya existe con las
-    mismas opciones.
+    Args:
+        collection: Colección de MongoDB.
+        retention_days: Días que se conservan los registros.
+
+    Returns:
+        No retorna valor.
 
     Raises:
-        AuditStorageError: Si el driver rechaza la creación.
+        AuditStorageError: Si los índices no se pueden crear.
     """
     specs = index_specs(retention_days)
     models = [spec.to_index_model() for spec in specs]

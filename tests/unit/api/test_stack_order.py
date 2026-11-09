@@ -1,7 +1,4 @@
-"""Orden real del stack de middlewares.
-
-El orden se resuelve en un único sitio: `install_middleware`.
-"""
+"""Pruebas del orden de los middlewares."""
 
 from starlette.middleware.cors import CORSMiddleware
 
@@ -31,6 +28,14 @@ def test_the_stack_order_is_the_contract_order() -> None:
 
 
 def test_the_factory_builds_the_same_stack(monkeypatch) -> None:
+    """Comprueba que la fábrica construye la misma pila de middlewares.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+
+    Returns:
+        No retorna valor.
+    """
     for variable in Settings.model_fields:
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("SERVICE_API_TOKEN", "s3cr3t-shared-token")

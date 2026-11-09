@@ -1,24 +1,4 @@
-"""Genera los targets de Vegeta para el microservicio de auditoría.
-
-Vegeta repite a ritmo constante un fichero de targets y no sabe inventar
-cuerpos. AUDA es append-only (``PUT``/``DELETE`` responden ``405``) y su
-``POST`` es idempotente: reenviar el mismo evento (misma pareja
-``checksum`` + ``performed_at``) devuelve ``200``, no un ``409``. Por eso este
-script no tiene ``--pre-clean`` (no hay borrado) y genera *dos* conjuntos de
-checksums disjuntos:
-
-* ``--count`` inserciones únicas (``salt="post"``), atacadas con ``POST``.
-* ``--reads`` checksums que, sembrados con ``--load``, sostienen los ``GET``
-  por checksum del set de lectura (``salt="read"``).
-
-    uv run python tests/stress/scripts/gen_targets.py --count 1000 --load
-    uv run python tests/stress/scripts/gen_targets.py --count 100 --reads 50
-
-``SERVICE_API_TOKEN`` es obligatoria: cada target lleva su ``Authorization`` y
-sin él sólo se recogerían ``401``. Los targets se emiten en el formato JSON de
-Vegeta (``-format json``) —un target por línea con el cuerpo en base64— porque
-el formato HTTP legible no admite cuerpos en línea.
-"""
+"""Genera peticiones de prueba para la herramienta Vegeta."""
 
 from __future__ import annotations
 
@@ -57,7 +37,16 @@ class LoadReport(NamedTuple):
 def generate_checksums(
     count: int, seed: int | None = None, *, salt: str = ""
 ) -> list[str]:
-    """Devuelve ``count`` checksums únicos (sha256 de ``salt+seed:índice``)."""
+    """Devuelve ``count`` checksums únicos (sha256 de ``salt+seed:índice``).
+
+    Args:
+        count: Cantidad de elementos.
+        seed: Semilla para generar los valores.
+        salt: Texto que se añade a la semilla.
+
+    Returns:
+        La lista de checksums.
+    """
     if count < 1:
         raise ValueError(f"count must be positive, got {count}")
     effective = seed if seed is not None else int.from_bytes(os.urandom(8), "big")
@@ -70,7 +59,17 @@ def generate_checksums(
 def build_targets(
     operation: str, base_url: str, token: str, checksums: Sequence[str]
 ) -> str:
-    """Compone los targets de Vegeta para una operación (una línea por target)."""
+    """Compone los targets de Vegeta para una operación (una línea por target).
+
+    Args:
+        operation: Operación que se va a generar.
+        base_url: Dirección base del servicio.
+        token: Token de acceso.
+        checksums: Lista de checksums.
+
+    Returns:
+        La lista de objetivos.
+    """
     if operation not in OPERATIONS:
         raise ValueError(f"unknown operation: {operation}")
     root = base_url.rstrip("/")
@@ -83,7 +82,18 @@ def build_targets(
 def _target_line(
     operation: str, root: str, token: str, index: int, checksum: str
 ) -> str:
-    """Serializa una petición como un target JSON de Vegeta."""
+    """Serializa una petición como un target JSON de Vegeta.
+
+    Args:
+        operation: Operación que se va a generar.
+        root: Dirección base del servicio.
+        token: Token de acceso.
+        index: Posición del elemento.
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        La línea del objetivo.
+    """
     method = "POST" if operation == "POST" else "GET"
     body = _body(operation, index, checksum)
     headers: dict[str, list[str]] = {"Authorization": [f"Bearer {token}"]}
@@ -99,6 +109,16 @@ def _target_line(
 
 
 def _url(operation: str, root: str, checksum: str) -> str:
+    """Construye la URL de una operación.
+
+    Args:
+        operation: Operación que se va a generar.
+        root: Dirección base del servicio.
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        La URL construida.
+    """
     if operation == "POST":
         return f"{root}/audit/logs"
     if operation == "LIST":
@@ -107,14 +127,31 @@ def _url(operation: str, root: str, checksum: str) -> str:
 
 
 def _body(operation: str, index: int, checksum: str) -> str | None:
-    """Cuerpo del target, o ``None`` si el verbo no lleva."""
+    """Cuerpo del target, o ``None`` si el verbo no lleva.
+
+    Args:
+        operation: Operación que se va a generar.
+        index: Posición del elemento.
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        El cuerpo de la petición o None.
+    """
     if operation == "POST":
         return _json(_event(index, checksum))
     return None
 
 
 def _event(index: int, checksum: str) -> dict[str, object]:
-    """Un evento de auditoría válido y único para el contrato de ``POST``."""
+    """Un evento de auditoría válido y único para el contrato de ``POST``.
+
+    Args:
+        index: Posición del elemento.
+        checksum: Valor que identifica el contenido.
+
+    Returns:
+        El evento de prueba.
+    """
     return {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -125,16 +162,39 @@ def _event(index: int, checksum: str) -> dict[str, object]:
 
 
 def _performed_at(index: int) -> str:
-    """RFC 3339 UTC con ``Z`` y milisegundos; único por índice."""
+    """RFC 3339 UTC con ``Z`` y milisegundos; único por índice.
+
+    Args:
+        index: Posición del elemento.
+
+    Returns:
+        La fecha del evento en formato RFC 3339.
+    """
     moment = PERFORMED_AT_BASE + timedelta(seconds=index)
     return f"{moment:%Y-%m-%dT%H:%M:%S}.{moment.microsecond // 1000:03d}Z"
 
 
 def _json(payload: dict) -> str:
+    """Convierte una carga útil en texto JSON.
+
+    Args:
+        payload: Datos que se van a enviar.
+
+    Returns:
+        El texto JSON.
+    """
     return json.dumps(payload, separators=(",", ":"))
 
 
 def _auth(token: str) -> dict[str, str]:
+    """Crea las cabeceras de autorización.
+
+    Args:
+        token: Token de acceso.
+
+    Returns:
+        Las cabeceras de autenticación.
+    """
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -147,8 +207,15 @@ def write_targets(
 ) -> dict[str, Path]:
     """Escribe un fichero por operación y devuelve ``{operación: ruta}``.
 
-    ``list`` reutiliza el tamaño del set de escritura (el valor del checksum es
-    irrelevante para el listado global).
+    Args:
+        out_dir: Carpeta donde se escriben los archivos.
+        base_url: Dirección base del servicio.
+        token: Token de acceso.
+        post_checksums: Checksums para las peticiones POST.
+        read_checksums: Checksums para las peticiones de lectura.
+
+    Returns:
+        Las rutas de los archivos escritos.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -164,7 +231,14 @@ def write_targets(
 
 @contextmanager
 def _http(client: httpx.Client | None) -> Iterator[httpx.Client]:
-    """Entrega el cliente dado, o crea y cierra uno propio."""
+    """Entrega el cliente dado, o crea y cierra uno propio.
+
+    Args:
+        client: Cliente que usa la prueba.
+
+    Returns:
+        No retorna valor.
+    """
     if client is not None:
         yield client
     else:
@@ -181,8 +255,14 @@ def load_documents(
 ) -> LoadReport:
     """Siembra los eventos del set de lectura con ``POST /audit/logs``.
 
-    Un ``200`` cuenta como *replay* (el evento ya estaba) y no aborta, de modo
-    que la siembra es reanudable.
+    Args:
+        base_url: Dirección base del servicio.
+        token: Token de acceso.
+        checksums: Lista de checksums.
+        client: Cliente que usa la prueba.
+
+    Returns:
+        El resumen de eventos creados y repetidos.
     """
     root = base_url.rstrip("/")
     created = existing = 0
@@ -205,8 +285,11 @@ def load_documents(
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI: siembra opcional y escribe los tres ficheros de targets.
 
-    Devuelve ``2`` si falta el token (comprobado **antes** de escribir nada) o
-    si los argumentos no tienen sentido.
+    Args:
+        argv: Argumentos de la línea de comandos.
+
+    Returns:
+        El código de salida.
     """
     args = _parse_args(argv)
 
@@ -239,6 +322,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    """Lee los argumentos de la línea de comandos.
+
+    Args:
+        argv: Argumentos de la línea de comandos.
+
+    Returns:
+        Los argumentos leídos.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--count", type=int, default=DEFAULT_COUNT)
     parser.add_argument(

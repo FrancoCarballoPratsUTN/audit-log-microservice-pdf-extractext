@@ -1,13 +1,4 @@
-"""Esquemas de petición y respuesta del contrato de auditoría.
-
-`_id` necesita `serialization_alias`: FastAPI serializa con `by_alias=True`,
-así que sin el alias el JSON sale con `id`, el `models.AuditLog.ID string` de
-Go se queda vacío y el orquestador ve un log sin identidad (SPEC §2.5 H3).
-
-`performed_at` y `received_at` son `str` a propósito: RFC 3339 con `Z` y
-milisegundos no es lo que Pydantic emite para un `datetime`, y el formato
-tiene que llegar a Go byte a byte; lo aporta `app/domain.models.to_wire_fields`.
-"""
+"""Define los datos de entrada y salida de la API."""
 
 from typing import Any
 
@@ -54,7 +45,14 @@ class AuditLogItem(BaseModel):
 
     @classmethod
     def from_log(cls, log: AuditLog) -> AuditLogItem:
-        """Construir el elemento desde el registro de dominio."""
+        """Crea el elemento de respuesta a partir de un registro.
+
+        Args:
+            log: Registro de auditoría.
+
+        Returns:
+            El elemento con los campos del contrato.
+        """
         return cls(**to_wire_fields(log))
 
 
@@ -66,7 +64,15 @@ class AuditLogResponse(AuditLogItem):
 
     @classmethod
     def from_log(cls, log: AuditLog, *, replay: bool = False) -> AuditLogResponse:
-        """Construir la respuesta desde el registro de dominio."""
+        """Crea la respuesta de escritura a partir de un registro.
+
+        Args:
+            log: Registro de auditoría.
+            replay: Indica si el evento ya existía.
+
+        Returns:
+            La respuesta con la marca de duplicado.
+        """
         return cls(**to_wire_fields(log), idempotent_replay=replay)
 
 

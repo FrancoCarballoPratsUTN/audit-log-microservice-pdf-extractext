@@ -1,5 +1,4 @@
-"""X-Request-ID`, generándolo si falta o no es seguro."""
-
+"""Añade un identificador único a cada petición."""
 import re
 import uuid
 
@@ -15,7 +14,15 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Resolver el identificador, seguir la cadena y devolverlo en la respuesta."""
+        """Añade un identificador único a cada petición.
+
+        Args:
+            request: Petición HTTP recibida.
+            call_next: Siguiente capa que procesa la petición.
+
+        Returns:
+            La respuesta con el identificador incluido.
+        """
         inbound_request_id = request.headers.get(REQUEST_ID_HEADER, "").strip()
         if REQUEST_ID_PATTERN.fullmatch(inbound_request_id):
             request_id = inbound_request_id

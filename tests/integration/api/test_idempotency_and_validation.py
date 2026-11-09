@@ -1,4 +1,4 @@
-"""Replay idempotente y validaciones de entrada (400 / 413)."""
+"""Pruebas de duplicados y validación de datos."""
 
 import pytest
 
@@ -13,8 +13,16 @@ from tests.integration.api.helpers import (
 async def test_an_identical_event_is_a_replay_and_leaves_one_document(
     deployed: None, clean_collection: object
 ) -> None:
-    """El reintento del orquestador (SPEC §5.3) responde `200` con el log
-    original, nunca inserta un segundo documento."""
+    """El reintento del orquestador responde `200` con el log original, nunca inserta un
+    segundo documento.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     with app_client() as client:
         first = client.post("/audit/logs", json=VALID_EVENT, headers=AUTH)
         second = client.post("/audit/logs", json=VALID_EVENT, headers=AUTH)
@@ -32,6 +40,14 @@ async def test_an_identical_event_is_a_replay_and_leaves_one_document(
 
 
 def test_missing_required_field_is_400_validation_error(deployed: None) -> None:
+    """Comprueba que falta un campo obligatorio y se devuelve 400.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     payload = {k: v for k, v in VALID_EVENT.items() if k != "action"}
 
     with app_client() as client:
@@ -46,8 +62,15 @@ def test_missing_required_field_is_400_validation_error(deployed: None) -> None:
 
 
 def test_unknown_top_level_key_is_400(deployed: None) -> None:
-    """`extra="forbid"` (SPEC §3.4): un 201 que descarta `user_id` en silencio es
-    el peor fallo posible en una auditoría."""
+    """`extra="forbid"`: un 201 que descarta `user_id` en silencio es el peor fallo
+    posible en una auditoría.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     with app_client() as client:
         response = client.post(
             "/audit/logs", json={**VALID_EVENT, "user_id": "u-1"}, headers=AUTH
@@ -58,7 +81,14 @@ def test_unknown_top_level_key_is_400(deployed: None) -> None:
 
 
 def test_performed_at_without_offset_is_400(deployed: None) -> None:
-    """`AwareDatetime`: una fecha naive no localiza el evento, se rechaza."""
+    """`AwareDatetime`: una fecha naive no localiza el evento, se rechaza.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     with app_client() as client:
         response = client.post(
             "/audit/logs",
@@ -73,7 +103,15 @@ def test_performed_at_without_offset_is_400(deployed: None) -> None:
 async def test_details_over_the_limit_is_413_and_nothing_is_written(
     deployed: None, clean_collection: object
 ) -> None:
-    """SPEC §4.4 paso 6: el límite de `details` se comprueba antes de la Capa 2."""
+    """El límite de `details` se comprueba antes de la Capa 2.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     event = {**VALID_EVENT, "details": {"blob": "x" * 70000}}
 
     with app_client() as client:
@@ -106,8 +144,17 @@ async def test_details_over_the_limit_is_413_and_nothing_is_written(
 async def test_invalid_details_are_400_and_do_not_poison_the_listing(
     deployed: None, clean_collection: object, details_json: str
 ) -> None:
-    """T19: ningún detalle que BSON no puede guardar deja un documento a medias
-    que haga fallar el `GET` siguiente."""
+    """Ningún detalle que BSON no puede guardar deja un documento a medias que haga
+    fallar el `GET` siguiente.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+        details_json: Detalles en formato JSON.
+
+    Returns:
+        No retorna valor.
+    """
     body = RAW_EVENT_PREFIX + details_json + "}"
     headers = {**AUTH, "Content-Type": "application/json"}
 

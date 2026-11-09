@@ -1,4 +1,4 @@
-"""Exigir `application/json` en el `POST`"""
+"""Exige que las peticiones POST usen JSON."""
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -15,7 +15,15 @@ class ContentTypeMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Responder `415` a un `POST` que no declare JSON, o continuar."""
+        """Exige que el POST use el tipo JSON.
+
+        Args:
+            request: Petición HTTP recibida.
+            call_next: Siguiente capa que procesa la petición.
+
+        Returns:
+            La respuesta o un error 415.
+        """
         if request.method == "POST":
             media_type = request.headers.get(CONTENT_TYPE_HEADER, "")
             declared = media_type.split(";", 1)[0].strip().lower()

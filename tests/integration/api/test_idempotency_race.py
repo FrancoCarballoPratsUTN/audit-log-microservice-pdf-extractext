@@ -1,29 +1,4 @@
-"""T11: la doble barrera bajo concurrencia real.
-
-SPEC §5.3 defiende la idempotencia con dos barreras: la Barrera 1 (`find_replay`)
-corta el reintento normal, y la Barrera 2 —el índice único decidido por MongoDB
-ante la carrera— convierte el `DuplicateKeyError` de los perdedores en el mismo
-`200` de replay. Lo que T11 prueba es que la segunda barrera no es decorativa:
-si se desactiva su traducción a `ReplayDetected`, el test de abajo se rompe.
-
-Dos escenarios, el mismo hecho:
-
-- El vertical HTTP: N `POST /audit/logs` idénticos lanzados a la vez contra la app
-  real. El observable no depende de qué barrera atrapa a cada perdedor: exactamente
-  un `201`, N-1 `200` de replay, y un solo documento.
-- La carrera a nivel de servicio con `asyncio.gather`: N `service.create` sobre un
-  mismo índice único real. Los N pasan la Barrera 1 casi a la vez (nadie ha
-  insertado todavía) y el índice decide el único ganador; los demás se traducen por
-  la Barrera 2. Este segundo escenario es el que **exige** la traducción: sin ella,
-  un perdedor de la carrera lanzaría el `DuplicateKeyError` crudo y el test
-  explotaría.
-
-Por qué el gate es la Capa 3 real y no un doble: con un repositorio fake las N
-peticiones se serializarían unas tras otras, la Barrera 1 cortaría a todas menos
-a la primera y la Barrera 2 nunca se ejercitaría —una defensa decorativa. Aquí la
-carrera la resuelve MongoDB de verdad, repetida `LOOPS` veces sin `sleep` ni
-polling, y el conteo de documentos se lee de la colección real.
-"""
+"""Pruebas de peticiones duplicadas al mismo tiempo."""
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -46,7 +21,14 @@ CHECKSUM = "9f86d081884c7d659a2feaa0c55ad015"
 
 
 def _event_payload(iteration: int) -> dict[str, object]:
-    """Un evento distinto por iteración, idéntico dentro de ella."""
+    """Un evento distinto por iteración, idéntico dentro de ella.
+
+    Args:
+        iteration: Número de la iteración.
+
+    Returns:
+        Los datos del evento.
+    """
     return {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -57,7 +39,14 @@ def _event_payload(iteration: int) -> dict[str, object]:
 
 
 def _request(iteration: int) -> CreateAuditLogRequest:
-    """El mismo evento como petición de dominio, para la carrera a nivel servicio."""
+    """El mismo evento como petición de dominio, para la carrera a nivel servicio.
+
+    Args:
+        iteration: Número de la iteración.
+
+    Returns:
+        La petición de dominio.
+    """
     payload = _event_payload(iteration)
     action = str(payload["action"])
     entity_type = str(payload["entity_type"])
@@ -79,9 +68,12 @@ async def test_ten_concurrent_posts_leave_exactly_one_document_and_one_201(
 ) -> None:
     """N `POST` idénticos simultáneos: un `201`, N-1 `200` de replay, un doc.
 
-    El `Barrier` del cliente sólo sincroniza la salida de los N hilos; dentro de la
-    app la carrera la resuelve el índice único real. La identidad cambia por
-    iteración para que cada bucle vuelva a empezar de cero.
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
     """
     with TestClient(create_app()) as client:
         for iteration in range(LOOPS):
@@ -91,6 +83,17 @@ async def test_ten_concurrent_posts_leave_exactly_one_document_and_one_201(
             def post_one(
                 _: int, event: dict[str, object] = payload, gate: Barrier = start
             ) -> tuple[int, str, bool]:
+                """Envía un evento y devuelve el estado, el identificador y si fue
+                repetición.
+
+                Args:
+                    _: Posición del resultado que no se usa.
+                    event: Datos del evento.
+                    gate: Barrera que sincroniza las peticiones.
+
+                Returns:
+                    El estado, el identificador y si fue una repetición.
+                """
                 gate.wait()
                 response = client.post("/audit/logs", json=event, headers=AUTH)
                 body = response.json()
@@ -125,10 +128,12 @@ async def test_the_unique_index_decides_one_winner_under_full_concurrency(
 ) -> None:
     """La traducción de `DuplicateKeyError` no es decorativa: la carrera la exige.
 
-    N `service.create` concurrentes sobre un índice único real: todos pasan la
-    Barrera 1 casi a la vez (la colección está vacía), el índice decide el único
-    ganador y el resto cae en la Barrera 2. Quitar la traducción de la Capa 3
-    hace explotar este test con el `DuplicateKeyError` crudo.
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
     """
     await ensure_indexes(clean_collection, retention_days=0)
     repository = MongoAuditLogRepository(clean_collection)

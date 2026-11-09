@@ -1,7 +1,4 @@
-"""Comunes para los tests de `POST /audit/logs` (divididos de test_create_audit_log.py).
-
-No se recolecta como test por empezar con guion bajo.
-"""
+"""Ayudas comunes para las pruebas de la API."""
 
 from fastapi.testclient import TestClient
 
@@ -26,4 +23,5 @@ RAW_EVENT_PREFIX = (
 
 
 def app_client() -> TestClient:
+    """Crea un cliente para la aplicación de prueba."""
     return TestClient(create_app())

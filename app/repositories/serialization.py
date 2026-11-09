@@ -1,9 +1,4 @@
-"""Mapeo BSON ⇄ dominio.
-
-`to_document` construye el documento de escritura y `to_audit_log` lo convierte
-de vuelta al dominio. El formato de los siete campos del cable vive en
-`app.domain.models.to_wire_fields`.
-"""
+"""Convierte entre registros y documentos de MongoDB."""
 
 from collections.abc import Mapping
 from datetime import datetime
@@ -17,16 +12,14 @@ from app.domain.models import AuditLog, CreateAuditLogRequest
 def to_document(
     request: CreateAuditLogRequest, *, received_at: datetime
 ) -> dict[str, Any]:
-    """El documento de §6.2 que Mongo debe guardar.
+    """Convierte una petición en un documento de MongoDB.
 
     Args:
-        request: Datos del evento ya normalizados por el dominio, sin `id` ni
-            `received_at`.
-        received_at: Instante (UTC) en que el servidor recibió la petición;
-            BSON `Date` lo guarda con precisión de milisegundos.
+        request: Petición HTTP recibida.
+        received_at: Fecha y hora en que se recibió el evento.
 
     Returns:
-        El documento con `_id` nuevo y `details` nunca `null`.
+        El documento listo para guardar.
     """
     return {
         "_id": ObjectId(),
@@ -40,17 +33,13 @@ def to_document(
 
 
 def to_audit_log(document: Mapping[str, Any]) -> AuditLog:
-    """El registro de dominio que el repositorio devuelve y la capa de
-    servicios consume.
-
-    PyMongo devuelve fechas *naive* interpretadas en UTC; `AuditLog` las
-    normaliza a UTC-aware y las trunca a milisegundos en su `__post_init__`.
+    """Convierte un documento de MongoDB en un registro.
 
     Args:
-        document: Documento leído de Mongo.
+        document: Documento de MongoDB.
 
     Returns:
-        El registro con `id` en hex y fechas UTC con precisión de ms.
+        El registro de auditoría.
     """
     return AuditLog(
         id=str(document["_id"]),

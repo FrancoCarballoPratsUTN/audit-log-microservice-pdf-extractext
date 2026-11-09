@@ -1,4 +1,4 @@
-"""Registrar una línea por petición servida, con su duración."""
+"""Registra cada petición y el tiempo que tarda."""
 
 import logging
 import time
@@ -14,7 +14,15 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Medir, registrar y devolver; registrar también si algo revienta."""
+        """Registra cada petición y su duración.
+
+        Args:
+            request: Petición HTTP recibida.
+            call_next: Siguiente capa que procesa la petición.
+
+        Returns:
+            La respuesta de la siguiente capa.
+        """
         request.app.state.active_requests = (
             getattr(request.app.state, "active_requests", 0) + 1
         )

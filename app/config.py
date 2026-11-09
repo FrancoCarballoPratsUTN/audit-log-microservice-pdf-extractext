@@ -1,8 +1,4 @@
-"""Configuración del servicio: se lee una vez al arrancar del entorno.
-
-`SERVICE_API_TOKEN` no tiene default: sin él el servicio se niega a arrancar
-(SPEC §3.6). El token es `SecretStr` para que nunca filtre por `repr` ni logs.
-"""
+"""Lee y valida la configuración del servicio."""
 
 import os
 from collections.abc import Mapping
@@ -42,7 +38,17 @@ class Settings(BaseSettings):
     @field_validator("service_api_token")
     @classmethod
     def reject_blank_token(cls, token: SecretStr) -> SecretStr:
-        """Tratar como ausente un token formado sólo por espacios."""
+        """Rechaza un token vacío o formado solo por espacios.
+
+        Args:
+            token: Token de acceso.
+
+        Returns:
+            El token validado.
+
+        Raises:
+            ValueError: Si el token está vacío.
+        """
         if not token.get_secret_value().strip():
             raise ValueError(
                 "service_api_token must not be empty: generate one with "
@@ -53,7 +59,17 @@ class Settings(BaseSettings):
     @field_validator("log_level", mode="before")
     @classmethod
     def normalize_log_level(cls, value: object) -> object:
-        """Validar el nivel de log al arrancar, no en el import."""
+        """Normaliza y valida el nivel de registro.
+
+        Args:
+            value: Valor que se va a revisar.
+
+        Returns:
+            El nivel de registro en mayúsculas.
+
+        Raises:
+            ValueError: Si el nivel no es válido.
+        """
         if not isinstance(value, str):
             return value
         level = value.strip().upper()
@@ -65,7 +81,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_related_limits(self) -> Self:
-        """Las parejas de límites deben ser coherentes entre sí."""
+        """Comprueba que los límites relacionados sean coherentes.
+
+        Raises:
+            ValueError: Si los límites no son coherentes.
+        """
         if self.default_limit > self.max_limit:
             raise ValueError(
                 "default_limit must be less than or equal to max_limit "
@@ -81,20 +101,16 @@ class Settings(BaseSettings):
 
 
 def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
-    """Construir la configuración desde el entorno (o un Mapping para tests).
-
-    Nunca se llama a nivel de módulo: importar `app.config` no exige entorno.
+    """Crea la configuración a partir del entorno.
 
     Args:
-        environ: Variables de entorno explícitas. Si se omite, se leen
-            `os.environ` y `.env`; si se aporta, se ignora `.env`.
+        environ: Variables de entorno.
 
     Returns:
         La configuración validada.
 
     Raises:
-        ValidationError: Si falta el token, un límite no es positivo, o una
-            pareja de límites es incoherente.
+        ValidationError: Si algún valor no es válido.
     """
     if environ is None:
         return Settings()
@@ -105,11 +121,7 @@ def get_settings(environ: Mapping[str, str] | None = None) -> Settings:
 
 
 def load_settings() -> Settings:
-    """Resolver la configuración desde el entorno o desde Consul.
-
-    Cuando `CONSUL_ENABLED=true`, lee las claves del prefix KV de Consul;
-    de lo contrario, lee del entorno y del archivo `.env`.
-    """
+    """Carga la configuración desde el entorno o Consul."""
     if os.getenv("CONSUL_ENABLED", "").lower() != "true":
         return get_settings()
     values = load_prefix(

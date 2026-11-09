@@ -1,4 +1,4 @@
-"""Evento válido: `201` + `Location` + los 7 campos, y el documento en Mongo."""
+"""Pruebas de un evento válido guardado en MongoDB."""
 
 from urllib.parse import quote
 
@@ -8,7 +8,15 @@ from tests.integration.api.helpers import AUTH, VALID_EVENT, app_client
 async def test_valid_event_gets_201_with_location_and_the_seven_fields(
     deployed: None, clean_collection: object
 ) -> None:
-    """SPEC §4.4 paso 9: `201` + `Location` + documento completo."""
+    """`201` + `Location` + documento completo.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     with app_client() as client:
         response = client.post("/audit/logs", json=VALID_EVENT, headers=AUTH)
 
@@ -30,7 +38,15 @@ async def test_valid_event_gets_201_with_location_and_the_seven_fields(
 async def test_the_document_really_landed_in_mongo(
     deployed: None, clean_collection: object
 ) -> None:
-    """El `201` no es una promesa: el documento está en la colección correcta."""
+    """El `201` no es una promesa: el documento está en la colección correcta.
+
+    Args:
+        deployed: Aplicación preparada contra MongoDB de prueba.
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     with app_client() as client:
         response = client.post("/audit/logs", json=VALID_EVENT, headers=AUTH)
 

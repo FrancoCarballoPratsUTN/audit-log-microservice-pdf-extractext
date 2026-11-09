@@ -1,1 +1,1 @@
-"""Tests de la Capa 3 (acceso a datos)."""
+"""Pruebas unitarias del acceso a datos."""

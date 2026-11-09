@@ -1,4 +1,4 @@
-"""Infraestructura compartida de tests de errores."""
+"""Ayudas comunes para probar los errores."""
 
 from pathlib import Path
 

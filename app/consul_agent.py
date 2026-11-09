@@ -1,4 +1,4 @@
-"""Minimal Consul agent API client for service lifecycle."""
+"""Registra y quita el servicio en Consul."""
 
 import json
 import os
@@ -12,7 +12,7 @@ from app.consul import ConsulConfigurationError
 
 
 def consul_registration() -> dict[str, Any] | None:
-    """Payload para registrar el servicio en Consul, o `None` si está deshabilitado."""
+    """Prepara los datos para registrar el servicio en Consul."""
     if os.getenv("CONSUL_ENABLED", "").lower() != "true":
         return None
     address = os.getenv("CONSUL_SERVICE_ADDRESS") or socket.gethostname()
@@ -57,6 +57,26 @@ def register_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
+    """Registra el servicio y su chequeo de salud en Consul.
+
+    Args:
+        address: Dirección del servidor de Consul.
+        token: Token de acceso.
+        service_id: Identificador del servicio en Consul.
+        service_name: Nombre del servicio.
+        service_address: Dirección del servicio.
+        service_port: Puerto del servicio.
+        check_url: URL del chequeo de salud.
+        tags: Etiquetas del servicio.
+        timeout: Tiempo máximo de espera en segundos.
+        ca_file: Ruta del certificado de autoridad.
+
+    Returns:
+        No retorna valor.
+
+    Raises:
+        ConsulConfigurationError: Si el registro no se puede completar.
+    """
     _request(
         address,
         token,
@@ -87,6 +107,21 @@ def deregister_service(
     timeout: float = 5.0,
     ca_file: str | None = None,
 ) -> None:
+    """Elimina el registro del servicio en Consul.
+
+    Args:
+        address: Dirección del servidor de Consul.
+        token: Token de acceso.
+        service_id: Identificador del servicio en Consul.
+        timeout: Tiempo máximo de espera en segundos.
+        ca_file: Ruta del certificado de autoridad.
+
+    Returns:
+        No retorna valor.
+
+    Raises:
+        ConsulConfigurationError: Si el servicio no se puede quitar.
+    """
     if not service_id.strip():
         raise ConsulConfigurationError("CONSUL_SERVICE_ID must not be empty")
     _request(
@@ -107,6 +142,23 @@ def _request(
     timeout: float,
     ca_file: str | None,
 ) -> None:
+    """Envía una petición al agente de Consul.
+
+    Args:
+        address: Dirección del servidor de Consul.
+        token: Token de acceso.
+        path: Ruta de la petición.
+        payload: Datos que se van a enviar.
+        timeout: Tiempo máximo de espera en segundos.
+        ca_file: Ruta del certificado de autoridad.
+
+    Returns:
+        No retorna valor.
+
+    Raises:
+        ConsulConfigurationError: Si Consul responde con un error o no está
+            disponible.
+    """
     if not address.strip() or not token.strip():
         raise ConsulConfigurationError(
             "CONSUL_HTTP_ADDR and CONSUL_HTTP_TOKEN are required"

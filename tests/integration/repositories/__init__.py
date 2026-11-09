@@ -1,1 +1,1 @@
-"""Tests de integración de la Capa 3 contra un MongoDB real."""
+"""Pruebas del repositorio contra MongoDB real."""

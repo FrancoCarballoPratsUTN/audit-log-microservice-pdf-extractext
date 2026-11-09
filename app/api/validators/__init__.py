@@ -1,1 +1,1 @@
-"""Validadores de entrada de la Capa 1."""
+"""Validaciones de los datos que llegan por HTTP."""

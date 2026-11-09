@@ -1,13 +1,4 @@
-"""Los índices de SPEC §6.3 contra un MongoDB de verdad.
-
-Los tests unitarios de `tests/unit/repositories/test_mongodb_lifecycle.py`
-afirman lo que el código **declara**. Estos afirman lo que MongoDB **hace**, que
-es lo único que importa: `IndexModel` es una clase nuestra en papel, y el
-veredicto lo emite el servidor.
-
-La comprobación de §6.3 con `mongosh` que pedía el plan está aquí, automatizada y
-con un fallo en vez de con una comparación a ojo.
-"""
+"""Pruebas de los índices contra MongoDB real."""
 
 from datetime import UTC, datetime
 
@@ -27,7 +18,14 @@ IDENTITY_INDEX_NAME = "unq_audit_event_identity"
 
 
 def make_document(**overrides: object) -> dict[str, object]:
-    """Un documento válido según §6.2, con lo que pida el test cambiado."""
+    """Un documento válido según §6.2, con lo que pida el test cambiado.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     document: dict[str, object] = {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -43,6 +41,14 @@ def make_document(**overrides: object) -> dict[str, object]:
 async def test_the_three_indexes_exist_when_retention_is_disabled(
     clean_collection: object,
 ) -> None:
+    """Comprueba que existen los tres índices sin retención.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
 
     names = set(await clean_collection.index_information())
@@ -58,8 +64,15 @@ async def test_the_three_indexes_exist_when_retention_is_disabled(
 async def test_no_ttl_index_exists_when_retention_is_disabled(
     clean_collection: object,
 ) -> None:
-    """`RETENTION_DAYS = 0` no crea TTL: un índice con `expireAfterSeconds: 0`
-    borraría la auditoría entera segundos después de arrancar."""
+    """`RETENTION_DAYS = 0` no crea TTL: un índice con `expireAfterSeconds: 0` borraría
+    la auditoría entera segundos después de arrancar.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
 
     indexes = await clean_collection.index_information()
@@ -70,6 +83,14 @@ async def test_no_ttl_index_exists_when_retention_is_disabled(
 async def test_the_ttl_index_exists_with_the_configured_window(
     clean_collection: object,
 ) -> None:
+    """Comprueba que existe el índice de borrado con su ventana.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     spec = ttl_index(30)
     assert spec is not None
 
@@ -84,8 +105,14 @@ async def test_the_ttl_index_exists_with_the_configured_window(
 async def test_mongo_reports_the_compound_indexes_with_id_descending(
     clean_collection: object,
 ) -> None:
-    """§6.3 y §12 comprobados contra el servidor, no contra nuestra intención: es
-    aquí donde se vería un `1` donde debía haber un `-1`."""
+    """Es aquí donde se vería un `1` donde debía haber un `-1`.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     indexes = await clean_collection.index_information()
 
@@ -103,6 +130,14 @@ async def test_mongo_reports_the_compound_indexes_with_id_descending(
 async def test_mongo_reports_the_identity_index_as_unique(
     clean_collection: object,
 ) -> None:
+    """Comprueba que MongoDB marca el índice de identidad como único.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     indexes = await clean_collection.index_information()
 
@@ -118,9 +153,14 @@ async def test_mongo_reports_the_identity_index_as_unique(
 async def test_the_unique_index_rejects_the_same_identity_twice(
     clean_collection: object,
 ) -> None:
-    """Barrera 2 de §5.3: el índice único es lo que cierra la carrera entre dos
-    peticiones concurrentes. Aquí se comprueba que Mongo, y no nuestra confianza,
-    lo rechaza."""
+    """El índice único es lo que cierra la carrera entre dos peticiones concurrentes.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_one(make_document())
 
@@ -133,9 +173,14 @@ async def test_the_unique_index_rejects_the_same_identity_twice(
 async def test_the_same_checksum_with_a_different_action_is_accepted(
     clean_collection: object,
 ) -> None:
-    """Un checksum genera varios eventos (`pdf.extract`, `text.create`, ...). Si el
-    índice único fuera sólo por `checksum`, el segundo evento se rechazaría y se
-    perdería una auditoría real (SPEC §2.5 H3)."""
+    """Un checksum genera varios eventos (`pdf.extract`, `text.create`, ...).
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_one(make_document())
 
@@ -147,8 +192,15 @@ async def test_the_same_checksum_with_a_different_action_is_accepted(
 async def test_the_same_action_and_checksum_at_a_different_moment_is_accepted(
     clean_collection: object,
 ) -> None:
-    """Dos extracciones del mismo documento en instantes distintos son dos
-    eventos, no un replay."""
+    """Dos extracciones del mismo documento en instantes distintos son dos eventos, no
+    un replay.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_one(make_document())
     later = datetime(2026, 10, 5, 13, 0, 0, tzinfo=UTC)
@@ -161,9 +213,15 @@ async def test_the_same_action_and_checksum_at_a_different_moment_is_accepted(
 async def test_creating_the_indexes_twice_is_harmless(
     clean_collection: object,
 ) -> None:
-    """El arranque se repite en cada despliegue y en cada reinicio: si
-    `create_indexes` no fuera idempotente, el segundo despliegue rompería el
-    servicio."""
+    """El arranque se repite en cada despliegue y en cada reinicio: si `create_indexes`
+    no fuera idempotente, el segundo despliegue rompería el servicio.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=30)
 
     await ensure_indexes(clean_collection, retention_days=30)
@@ -174,9 +232,12 @@ async def test_creating_the_indexes_twice_is_harmless(
 def make_documents(count: int, **overrides: object) -> list[dict[str, object]]:
     """`count` documentos con la misma marca de tiempo e identidad distinta.
 
-    La identidad tiene que variar porque el índice único de §6.3 rechaza dos
-    documentos iguales, y las fechas se repiten a propósito: es lo que obliga al
-    desempate de §12 a hacer su trabajo.
+    Args:
+        count: Cantidad de elementos.
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
     """
     return [
         make_document(action=f"pdf.extract.{index}", **overrides)
@@ -187,11 +248,14 @@ def make_documents(count: int, **overrides: object) -> list[dict[str, object]]:
 async def test_the_compound_indexes_are_actually_used_by_the_query(
     clean_collection: object,
 ) -> None:
-    """Un índice que existe pero que Mongo no elige sirve de nada, y `explain` es
-    la única forma de comprobarlo.
+    """Un índice que existe pero que Mongo no elige sirve de nada, y `explain` es la
+    única forma de comprobarlo.
 
-    Se insertan 200 documentos porque con tres el planificador elige `COLLSCAN`, y
-    hace bien: recorrer tres documentos es más barato que mantener un árbol B.
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
     """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_many(make_documents(200))
@@ -217,8 +281,14 @@ async def test_the_plan_declares_both_fields_descending(
     clean_collection: object,
 ) -> None:
     """El `keyPattern` del plan es lo que Mongo dice que va a recorrer: si aquí
-    apareciera un `1` donde debía haber un `-1`, el índice se creó bien pero la
-    consulta lo usa al revés."""
+    apareciera un `1` donde debía haber un `-1`, el índice se creó bien pero l...
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_many(make_documents(200))
 
@@ -231,10 +301,14 @@ async def test_the_plan_declares_both_fields_descending(
 async def test_the_query_plan_returns_a_stable_order_for_equal_timestamps(
     clean_collection: object,
 ) -> None:
-    """§12 en su forma observable: veinte eventos con el mismo `performed_at` deben
-    salir siempre en el mismo orden. Sin el `_id` descendente, Mongo puede
-    devolverlos en cualquier orden entre llamadas, y `skip/limit` paginaría filas
-    repetidas y huecos."""
+    """Veinte eventos con el mismo `performed_at` deben salir siempre en el mismo orden.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_many(make_documents(20))
 
@@ -254,8 +328,15 @@ async def test_the_query_plan_returns_a_stable_order_for_equal_timestamps(
 async def test_skip_and_limit_paginates_without_repeating_or_skipping(
     clean_collection: object,
 ) -> None:
-    """El bug concreto de §12, de punta a punta: dos páginas de cinco sobre veinte
-    eventos empatados no pueden solaparse ni dejar huecos."""
+    """Dos páginas de cinco sobre veinte eventos empatados no pueden solaparse ni dejar
+    huecos.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     await ensure_indexes(clean_collection, retention_days=0)
     await clean_collection.insert_many(make_documents(20))
 
@@ -284,7 +365,14 @@ async def test_skip_and_limit_paginates_without_repeating_or_skipping(
 async def test_the_collection_lives_where_the_configuration_says(
     clean_collection: object,
 ) -> None:
-    """Un índice creado en la colección equivocada no protege de nada, y no se
-    nota hasta que hay dos documentos con la misma identidad."""
+    """Un índice creado en la colección equivocada no protege de nada, y no se nota
+    hasta que hay dos documentos con la misma identidad.
+
+    Args:
+        clean_collection: Colección de prueba vacía.
+
+    Returns:
+        No retorna valor.
+    """
     assert clean_collection.name == COLLECTION_NAME
     assert clean_collection.database.name == "pdf_extractext_audit_test"

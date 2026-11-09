@@ -1,20 +1,4 @@
-"""Infraestructura compartida de los tests de integración.
-
-Un test de integración que no puede correr por falta de una dependencia externa
-debe **omitirse diciendo por qué**, no marcarse verde. Un `pytest.skip` con motivo
-es visible; un test eliminado o silenciosamente verde es una mentira que aparece
-meses después en producción (SPEC §14).
-
-Dos decisiones que parecen detalles y no lo son:
-
-- La base de datos es siempre una distinta de la de despliegue, y su nombre tiene
-  que acabar en `_test`: estos tests **borran colecciones**, y confundir el nombre
-  significa borrar la auditoría real.
-- Los índices se limpian en cada test, no una vez por sesión. MongoDB nunca borra
-  un índice: un `ttl_performed_at` creado por un test seguiría ahí en el siguiente,
-  y `test_no_ttl_index_is_created_when_retention_is_zero` pasaría sin que el
-  lifespan hubiera creado nada. Ese fallo ocurrió de verdad durante T6.
-"""
+"""Prepara MongoDB y la configuración de las pruebas."""
 
 import os
 from collections.abc import AsyncIterator, Iterator
@@ -35,7 +19,14 @@ TEST_TOKEN = "token-de-prueba"
 
 
 def redact(uri: str) -> str:
-    """La URI sin su contraseña, para poder imprimirla en un mensaje de error."""
+    """La URI sin su contraseña, para poder imprimirla en un mensaje de error.
+
+    Args:
+        uri: URI de conexión.
+
+    Returns:
+        La URI sin contraseña.
+    """
     if "@" not in uri:
         return uri
     scheme, _, rest = uri.partition("://")
@@ -45,15 +36,7 @@ def redact(uri: str) -> str:
 
 @pytest.fixture(scope="session")
 def mongo_uri() -> str:
-    """URI del MongoDB de pruebas, o `skip` si no hay nadie escuchando.
-
-    Se distingue el caso de «no hay Mongo» del caso de «hay Mongo pero rechaza
-    las credenciales»: el primero es una dependencia ausente y un `skip` es lo
-    correcto; el segundo es una configuración mal puesta, y un `skip` lo
-    escondería. Varios despliegues locales (Docker con usuario root, Atlas) exigen
-    usuario, contraseña y `authSource`, así que confundirlos convierte un fallo de
-    configuración en una suite medio verde sin avisar.
-    """
+    """URI del MongoDB de pruebas, o `skip` si no hay nadie escuchando."""
     uri = os.environ.get("MONGO_URI", DEFAULT_URI)
     probe = MongoClient(uri, serverSelectionTimeoutMS=PROBE_TIMEOUT_MS)
     try:
@@ -95,8 +78,12 @@ async def mongo_client(
 ) -> AsyncIterator[AsyncMongoClient[dict[str, object]]]:
     """Cliente contra la base de pruebas, cerrado al terminar.
 
-    El cierre va en el `finally` a propósito: un test que falla antes del `yield`
-    no debe dejar un pool de conexiones abierto.
+    Args:
+        mongo_uri: URI de conexión a MongoDB.
+        test_database: Nombre de la base de datos de prueba.
+
+    Returns:
+        No retorna valor.
     """
     client = AsyncMongoClient(mongo_uri, serverSelectionTimeoutMS=3000)
     try:
@@ -112,8 +99,12 @@ async def clean_collection(
 ) -> AsyncIterator[object]:
     """Colección `audit_logs_test` recién creada, sin índices ni documentos.
 
-    Depender de este fixture es lo que hace fiable un test que comprueba qué
-    índices hay: garantiza que los que se lean son los que creó este test.
+    Args:
+        mongo_client: Cliente de MongoDB.
+        test_database: Nombre de la base de datos de prueba.
+
+    Returns:
+        No retorna valor.
     """
     settings = get_settings(
         environ={
@@ -132,7 +123,16 @@ async def clean_collection(
 def deployed(
     monkeypatch: pytest.MonkeyPatch, mongo_uri: str, test_database: str
 ) -> None:
-    """Apunta la configuración del despliegue a la base de pruebas."""
+    """Apunta la configuración del despliegue a la base de pruebas.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+        mongo_uri: URI de conexión a MongoDB.
+        test_database: Nombre de la base de datos de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     monkeypatch.setenv("SERVICE_API_TOKEN", TEST_TOKEN)
     monkeypatch.setenv("MONGO_URI", mongo_uri)
     monkeypatch.setenv("MONGO_DATABASE", test_database)

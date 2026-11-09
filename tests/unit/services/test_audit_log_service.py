@@ -1,15 +1,4 @@
-"""`AuditLogService`: los casos de uso de escritura y lectura (SPEC §5.3, §8.1).
-
-El fake de `tests/fakes/fake_repository.py` es el doble real de la Capa 3: la
-orquestación no se prueba contra el driver, se prueba contra un contrato en
-memoria. Sus contadores existen a propósito —el AC del plan exige afirmar
-«insert no se invocó»— y el almacén observable permite sembrar el evento
-previo.
-
-La carrera de la Barrera 2 no cabe en el fake estático (primera lectura `None`,
-insert con `DuplicateKeyError`, segunda lectura con ganador), así que se modela
-con un doble mínimo por test, igual que en `test_mongodb_lifecycle.py`.
-"""
+"""Pruebas del servicio de auditoría."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -28,7 +17,14 @@ WIRE_ID = "68e2c1f4a1b2c3d4e5f60718"
 
 
 def make_request(**overrides: object) -> CreateAuditLogRequest:
-    """Petición válida, con lo que pida el test cambiado."""
+    """Petición válida, con lo que pida el test cambiado.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     values: dict[str, object] = {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -40,7 +36,14 @@ def make_request(**overrides: object) -> CreateAuditLogRequest:
 
 
 def make_log(**overrides: object) -> AuditLog:
-    """Registro ya almacenado con la misma identidad que `make_request()`."""
+    """Registro ya almacenado con la misma identidad que `make_request()`.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     values: dict[str, object] = {
         "id": WIRE_ID,
         "action": "pdf.extract",
@@ -55,9 +58,9 @@ def make_log(**overrides: object) -> AuditLog:
 
 
 async def test_a_stored_event_is_returned_as_a_replay_without_inserting() -> None:
-    """AC del plan y SPEC §5.3: con el evento ya en la Barrera 1, el resultado
-    es el registro existente y `insert` no llega a invocarse. Un reintento del
-    Orquestador no debe producir una segunda escritura jamás."""
+    """Con el evento ya en la Barrera 1, el resultado es el registro existente y
+    `insert` no llega a invocarse.
+    """
     stored = make_log()
     fake = FakeAuditLogRepository(items=[stored])
     service = AuditLogService(fake)
@@ -69,8 +72,9 @@ async def test_a_stored_event_is_returned_as_a_replay_without_inserting() -> Non
 
 
 async def test_the_replay_path_invokes_the_read_exactly_once() -> None:
-    """La Barrera 1 se consulta, se decide y se responde: no hay relecturas ni
-    llamadas de escritura de por medio."""
+    """La Barrera 1 se consulta, se decide y se responde: no hay relecturas ni llamadas
+    de escritura de por medio.
+    """
     fake = FakeAuditLogRepository(items=[make_log()])
     service = AuditLogService(fake)
 
@@ -82,8 +86,9 @@ async def test_the_replay_path_invokes_the_read_exactly_once() -> None:
 
 
 async def test_a_new_event_is_inserted_and_reported_as_created() -> None:
-    """Sin evento previo: una lectura de Barrera 1, una escritura, y el log
-    devuelto es exactamente el que se insertó."""
+    """Sin evento previo: una lectura de Barrera 1, una escritura, y el log devuelto es
+    exactamente el que se insertó.
+    """
     fake = FakeAuditLogRepository()
     service = AuditLogService(fake)
     request = make_request(details={"page_count": 12})
@@ -101,8 +106,9 @@ async def test_a_new_event_is_inserted_and_reported_as_created() -> None:
 
 
 async def test_received_at_is_server_clock_and_performed_at_keeps_its_instant() -> None:
-    """SPEC §5.2: `received_at` es el reloj del servidor, no el del emisor; y
-    `performed_at` conserva el instante del emisor, ya normalizado a ms."""
+    """`received_at` es el reloj del servidor, no el del emisor; y `performed_at`
+    conserva el instante del emisor, ya normalizado a ms.
+    """
     fake = FakeAuditLogRepository()
     service = AuditLogService(fake)
     request = make_request()
@@ -118,6 +124,14 @@ class RacingFake:
     rechaza la escritura y la relectura devuelve al ganador."""
 
     def __init__(self, winner: AuditLog) -> None:
+        """Crea un repositorio falso con un ganador preparado.
+
+        Args:
+            winner: Registro que ya existía.
+
+        Returns:
+            No retorna valor.
+        """
         self._winner = winner
         self._reads = 0
 
@@ -129,18 +143,36 @@ class RacingFake:
         checksum: str,
         performed_at: datetime,
     ) -> AuditLog | None:
+        """Devuelve el ganador en la segunda lectura.
+
+        Args:
+            action: Acción realizada.
+            entity_type: Tipo de entidad afectada.
+            checksum: Valor que identifica el contenido.
+            performed_at: Fecha y hora en que ocurrió el evento.
+
+        Returns:
+            El documento encontrado o None.
+        """
         self._reads += 1
         return None if self._reads == 1 else self._winner
 
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
+        """Lanza la señal de que el evento ya existía.
+
+        Args:
+            request: Petición HTTP recibida.
+
+        Returns:
+            No retorna valor.
+        """
         raise ReplayDetected()
 
 
 async def test_a_duplicate_signal_produces_the_same_replay_result() -> None:
-    """Barrera 2: cuando el índice único gana por la mínima, la señal sale del
-    servicio como el **mismo** resultado observable que la Barrera 1 —el log
-    existente con `replay=True`— y no como un error. Ahí se decide que el
-    replay no es un fallo (SPEC §5.3)."""
+    """Cuando el índice único gana por la mínima, la señal sale del servicio como el
+    **mismo** resultado observable que la Barrera 1 —el log ex...
+    """
     winner = make_log()
     service = AuditLogService(RacingFake(winner))
 
@@ -162,23 +194,43 @@ class PhantomFake:
         checksum: str,
         performed_at: datetime,
     ) -> AuditLog | None:
+        """Devuelve None en la primera y la segunda lectura.
+
+        Args:
+            action: Acción realizada.
+            entity_type: Tipo de entidad afectada.
+            checksum: Valor que identifica el contenido.
+            performed_at: Fecha y hora en que ocurrió el evento.
+
+        Returns:
+            No retorna valor.
+        """
         return None
 
     async def insert(self, request: CreateAuditLogRequest) -> AuditLog:
+        """Lanza la señal de que el evento ya existía.
+
+        Args:
+            request: Petición HTTP recibida.
+
+        Returns:
+            No retorna valor.
+        """
         raise ReplayDetected()
 
 
 async def test_a_duplicate_that_cannot_be_read_back_is_a_storage_error() -> None:
-    """Si el índice dijo «ya existe» y la relectura no lo encuentra, el
-    almacenamiento no es fiable: `503` reintentable, no un `500` que se
-    esconde ni un crash."""
+    """Si el índice dijo «ya existe» y la relectura no lo encuentra, el almacenamiento
+    no es fiable: `503` reintentable, no un `500` que se esconde ni un...
+    """
     with pytest.raises(AuditStorageError):
         await AuditLogService(PhantomFake()).create(make_request())
 
 
 async def test_list_page_returns_the_requested_slice_from_the_repository() -> None:
-    """SPEC §8.1: la Capa 2 traslada la página ya validada por Capa 1 a Capa 3
-    sin recortarla ni reordenarla —quien corta y ordena es el repositorio—."""
+    """La Capa 2 traslada la página ya validada por Capa 1 a Capa 3 sin recortarla ni
+    reordenarla —quien corta y ordena es el repositorio—.
+    """
     newer = make_log(
         id="000000000000000000000002",
         performed_at=PERFORMED_AT,
@@ -195,9 +247,9 @@ async def test_list_page_returns_the_requested_slice_from_the_repository() -> No
 
 
 async def test_list_by_checksum_returns_only_the_repository_matches() -> None:
-    """SPEC §8.1: la Capa 2 delega el filtro en el repositorio —filtrar y
-    ordenar es responsabilidad de la Capa 3, respaldada por el índice compuesto
-    de §6.3— y devuelve lo que éste entregue, sin reordenar."""
+    """La Capa 2 delega el filtro en el repositorio —filtrar y ordenar es
+    responsabilidad de la Capa 3, respaldada por el índice compuesto de §...
+    """
     wanted = make_log(id="000000000000000000000001", checksum=CHECKSUM)
     other = make_log(id="000000000000000000000002", checksum="otro-checksum")
     service = AuditLogService(FakeAuditLogRepository(items=[wanted, other]))

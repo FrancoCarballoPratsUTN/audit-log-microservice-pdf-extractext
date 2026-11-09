@@ -1,21 +1,4 @@
-"""Lifecycle de Mongo: los índices de SPEC §6.3 como datos, no como efectos.
-
-Un índice es configuración que no se ve hasta que se rompe. Si
-`(checksum, performed_at desc, _id desc)` se crea sin el `_id desc`, todo sigue
-funcionando: las consultas devuelven lo correcto, los tests de contenido pasan, y
-sólo dos semanas después una página de `skip/limit` devuelve filas distintas entre
-llamadas. Por eso los índices se declaran **como datos** en este módulo y se
-traducen a `IndexModel` en el último momento: así se pueden afirmar sin abrir una
-conexión.
-
-`ping` sí necesita el driver, porque su trabajo es exactamente recibir la
-excepción de él. Se prueba con el doble de `tests/fakes/fake_mongo.py`, que lanza
-la excepción real de PyMongo: la traducción se define sobre las clases que el
-driver levanta de verdad.
-
-La verificación contra un MongoDB real vive en
-`tests/integration/repositories/test_mongo_indexes.py`.
-"""
+"""Pruebas de la conexión y los índices de MongoDB."""
 
 import pytest
 from pymongo.errors import (
@@ -43,7 +26,14 @@ SECRET_URI = "mongodb://auditor:contrasena-secreta@localhost:27017"
 
 
 def build_settings(**overrides: object) -> Settings:
-    """Ajustes sobre el mínimo válido."""
+    """Ajustes sobre el mínimo válido.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        La configuración creada para la prueba.
+    """
     return get_settings(environ={"SERVICE_API_TOKEN": "t", **overrides})
 
 
@@ -51,17 +41,26 @@ class RecordingCollection:
     """Colección que guarda los `IndexModel` que recibió, sin tocar Mongo."""
 
     def __init__(self) -> None:
+        """Crea una colección que registra los índices creados."""
         self.models: list[object] = []
 
     async def create_indexes(self, models: list[object]) -> list[str]:
+        """Guarda los modelos de índice recibidos.
+
+        Args:
+            models: Modelos de índice que se van a crear.
+
+        Returns:
+            La lista de nombres de los índices creados.
+        """
         self.models = list(models)
         return [model.document["name"] for model in self.models]
 
 
 def test_the_unique_index_covers_exactly_the_identity_tuple() -> None:
-    """SPEC §6.3 fila 2: la idempotencia se decide sobre
-    `(action, entity_type, checksum, performed_at)`, ni un campo más ni uno menos.
-    Un checksum genera varios eventos, así que el checksum solo no basta."""
+    """La idempotencia se decide sobre `(action, entity_type, checksum, performed_at)`,
+    ni un campo más ni uno menos.
+    """
     assert UNIQUE_IDEMPOTENCY_INDEX.fields == (
         "action",
         "entity_type",
@@ -72,19 +71,22 @@ def test_the_unique_index_covers_exactly_the_identity_tuple() -> None:
 
 def test_the_unique_index_is_unique() -> None:
     """Sin `unique`, la Barrera 2 de §5.3 no existe y la carrera de T11 inserta
-    duplicados."""
+    duplicados.
+    """
     assert UNIQUE_IDEMPOTENCY_INDEX.unique is True
 
 
 def test_the_identity_index_does_not_sort_descending() -> None:
-    """El índice único va en ascendente: MongoDB recorre un índice único al revés
-    tan bien como al derecho, y aquí el desempate de §12 no aplica."""
+    """El índice único va en ascendente: MongoDB recorre un índice único al revés tan
+    bien como al derecho, y aquí el desempate de §12 no aplica.
+    """
     assert UNIQUE_IDEMPOTENCY_INDEX.descending == frozenset()
 
 
 def test_the_checksum_lookup_ends_with_id_descending() -> None:
-    """SPEC §6.3 fila 3 y §12: sin `_id desc` como desempate, dos eventos con el
-    mismo `performed_at` se ordenarían de forma no determinista."""
+    """Sin `_id desc` como desempate, dos eventos con el mismo `performed_at` se
+    ordenarían de forma no determinista.
+    """
     spec = next(
         spec
         for spec in index_specs(0)
@@ -96,8 +98,7 @@ def test_the_checksum_lookup_ends_with_id_descending() -> None:
 
 
 def test_the_global_lookup_ends_with_id_descending() -> None:
-    """SPEC §6.3 fila 4 y §12: mismo motivo que el anterior, para
-    `GET /audit/logs`."""
+    """Mismo motivo que el anterior, para `GET /audit/logs`."""
     spec = next(spec for spec in index_specs(0) if spec.fields[0] == "performed_at")
 
     assert spec.fields == ("performed_at", "_id")
@@ -105,12 +106,8 @@ def test_the_global_lookup_ends_with_id_descending() -> None:
 
 
 def test_every_lookup_index_ends_with_id_descending() -> None:
-    """Guard de §12 sobre la propiedad y no sobre un índice concreto: cualquier
-    índice de lectura con más de un campo necesita el `_id` descendente al final
-    como desempate.
-
-    El índice único se excluye a propósito: su primera tupla ya es única, así que
-    no hay dos filas que empatar y no necesita desempate.
+    """Guard de §12 sobre la propiedad y no sobre un índice concreto: cualquier índice
+    de lectura con más de un campo necesita el `_id` descendente al fin...
     """
     lookups = [spec for spec in index_specs(0) if not spec.unique]
 
@@ -122,21 +119,24 @@ def test_every_lookup_index_ends_with_id_descending() -> None:
 
 
 def test_only_the_identity_index_is_unique() -> None:
-    """Los otros dos son de lectura; hacerlos únicos convertiría un `GET` en un
-    `409` inexplicable."""
+    """Los otros dos son de lectura; hacerlos únicos convertiría un `GET` en un `409`
+    inexplicable.
+    """
     unique = [spec.name for spec in index_specs(0) if spec.unique]
 
     assert unique == [UNIQUE_IDEMPOTENCY_INDEX.name]
 
 
 def test_no_ttl_index_when_retention_is_disabled() -> None:
-    """`RETENTION_DAYS = 0` significa "retención desactivada", no "borrar ya": un
-    TTL de 0 segundos vaciaría la auditoría entera."""
+    """`RETENTION_DAYS = 0` significa "retención desactivada", no "borrar ya": un TTL de
+    0 segundos vaciaría la auditoría entera.
+    """
     assert ttl_index(0) is None
     assert all(spec.expire_after_seconds is None for spec in index_specs(0))
 
 
 def test_the_ttl_index_is_built_when_retention_is_positive() -> None:
+    """Comprueba que se crea el índice TTL cuando hay retención."""
     spec = ttl_index(30)
 
     assert spec is not None
@@ -152,8 +152,9 @@ def test_the_ttl_index_is_the_only_fourth_one() -> None:
 
 
 def test_fields_render_as_ones_and_minus_ones_in_order() -> None:
-    """El contrato de `IndexModel`: nombre del campo con `1`/`-1`, y el orden de
-    la tupla es el orden del índice."""
+    """El contrato de `IndexModel`: nombre del campo con `1`/`-1`, y el orden de la
+    tupla es el orden del índice.
+    """
     spec = next(spec for spec in index_specs(0) if spec.fields[0] == "checksum")
 
     assert spec.keys == [("checksum", 1), ("performed_at", -1), ("_id", -1)]
@@ -161,7 +162,8 @@ def test_fields_render_as_ones_and_minus_ones_in_order() -> None:
 
 def test_the_index_model_carries_its_name_and_its_flags() -> None:
     """`getIndexes()` en `mongosh` tiene que mostrar lo que SPEC §6.3 promete, con
-    nombre estable para poder citarlo en el handoff."""
+    nombre estable para poder citarlo en el handoff.
+    """
     model = UNIQUE_IDEMPOTENCY_INDEX.to_index_model()
 
     assert model.document["name"] == UNIQUE_IDEMPOTENCY_INDEX.name
@@ -173,8 +175,9 @@ def test_the_index_model_carries_its_name_and_its_flags() -> None:
 
 
 async def test_ensure_indexes_hands_the_collection_every_spec() -> None:
-    """Un bucle que se comiera un índice por el camino no se vería en ningún test
-    de contenido: sólo se ve contando lo que llega a la colección."""
+    """Un bucle que se comiera un índice por el camino no se vería en ningún test de
+    contenido: sólo se ve contando lo que llega a la colección.
+    """
     collection = RecordingCollection()
 
     await ensure_indexes(collection, retention_days=30)
@@ -183,17 +186,18 @@ async def test_ensure_indexes_hands_the_collection_every_spec() -> None:
 
 
 def test_the_client_is_built_with_the_configured_timeout() -> None:
-    """Sin `serverSelectionTimeoutMS`, un Mongo caído bloquea el arranque el
-    tiempo por defecto del driver (30 s) en vez del `MONGO_TIMEOUT_MS` del
-    despliegue."""
+    """Sin `serverSelectionTimeoutMS`, un Mongo caído bloquea el arranque el tiempo por
+    defecto del driver (30 s) en vez del `MONGO_TIMEOUT_MS` del despli...
+    """
     client = open_client(build_settings(mongo_timeout_ms="2500"))
 
     assert client.options.server_selection_timeout == 2.5
 
 
 def test_the_collection_lands_in_the_configured_database() -> None:
-    """Escribir en la base equivocada no falla: deja los datos en otro sitio donde
-    nadie los busca, que es peor que un error."""
+    """Escribir en la base equivocada no falla: deja los datos en otro sitio donde nadie
+    los busca, que es peor que un error.
+    """
     settings = build_settings(
         mongo_database="otro_db", mongo_audit_logs_collection="otra_coleccion"
     )
@@ -215,16 +219,22 @@ def test_the_collection_lands_in_the_configured_database() -> None:
     ids=["sin-servidor", "red-caida", "operacion-lenta", "driver-inesperado"],
 )
 async def test_ping_reports_an_unavailable_storage(error: Exception) -> None:
-    """SPEC §6.4: Mongo inalcanzable es `503` y no `500`, porque quien llama puede
-    reintentar. Y sale como `AuditStorageError`, que es lo que traduce la Capa 1."""
+    """Mongo inalcanzable es `503` y no `500`, porque quien llama puede reintentar.
+
+    Args:
+        error: Error que se va a lanzar o comprobar.
+
+    Returns:
+        No retorna valor.
+    """
     with pytest.raises(AuditStorageError):
         await ping(FailingClient(error))
 
 
 async def test_ping_never_leaks_the_credentials_of_the_uri() -> None:
-    """El detalle de un fallo de conexión suele traer `host:port`, y con él parte
-    de la URI. Esa variable acaba en logs ajenos al servicio y en capturas de
-    pantalla."""
+    """El detalle de un fallo de conexión suele traer `host:port`, y con él parte de la
+    URI.
+    """
     with pytest.raises(AuditStorageError) as failure:
         await ping(FailingClient(ServerSelectionTimeoutError(SECRET_URI)))
 
@@ -234,11 +244,19 @@ async def test_ping_never_leaks_the_credentials_of_the_uri() -> None:
 
 async def test_ping_does_not_swallow_a_programming_error() -> None:
     """Una `TypeError` o un `AttributeError` en nuestro código no es un problema de
-    infraestructura: traducirla a `503` haría que un bug pareciera una caída de
-    Mongo y escondería el defecto detrás de un reintento del Orquestador."""
+    infraestructura: traducirla a `503` haría que un bug pareciera una caí...
+    """
 
     class ExplodingAdmin:
         async def command(self, name: str) -> dict[str, float]:
+            """Lanza un error de programación al ejecutar el comando.
+
+            Args:
+                name: Nombre del comando o recurso.
+
+            Returns:
+                No retorna valor.
+            """
             raise TypeError("se esperaba un dict, llegó otra cosa")
 
     class ExplodingClient:
@@ -249,8 +267,9 @@ async def test_ping_does_not_swallow_a_programming_error() -> None:
 
 
 async def test_ping_says_nothing_when_mongo_answers() -> None:
-    """El camino feliz no debe fabricar un error ni devolver nada que el lifespan
-    tenga que interpretar."""
+    """El camino feliz no debe fabricar un error ni devolver nada que el lifespan tenga
+    que interpretar.
+    """
     assert await ping(WorkingClient()) is None
 
 
@@ -268,14 +287,23 @@ async def test_ensure_indexes_reports_an_unavailable_storage(
 ) -> None:
     """SPEC §6.4 aplicado a la creación de índices.
 
-    El caso real no es inventado: `create_indexes` falla con `OperationFailure` si
-    un índice del mismo nombre ya existe con otras opciones, que es justo lo que
-    pasa al desplegar sobre una base creada por una versión anterior. Si eso saliera
-    como `500`, el Orquestador no lo reintentaría y el servicio no volvería a
-    levantar sus índices ni al reiniciar."""
+    Args:
+        error: Error que se va a lanzar o comprobar.
+
+    Returns:
+        No retorna valor.
+    """
 
     class RejectingCollection:
         async def create_indexes(self, models: list[object]) -> list[str]:
+            """Lanza un error de almacenamiento al crear índices.
+
+            Args:
+                models: Modelos de índice que se van a crear.
+
+            Returns:
+                No retorna valor.
+            """
             raise error
 
     with pytest.raises(AuditStorageError):
@@ -295,15 +323,26 @@ async def test_ensure_indexes_reports_an_unavailable_storage(
 async def test_ensure_indexes_never_leaks_what_the_driver_said(
     driver_message: str,
 ) -> None:
-    """El detalle del error es lo que sale hacia el cliente y lo que acaba en los
-    logs de quien recibe el `503`. El driver mete `host:port`, y a veces la URI
-    entera o el motivo de autenticación, en sus mensajes. Este servicio responde
-    siempre con su propio texto y descarta el del driver: el diagnóstico va al log
-    del servidor, que controlamos, y no a una respuesta que puede acabar en una
-    captura de pantalla."""
+    """El detalle del error es lo que sale hacia el cliente y lo que acaba en los logs
+    de quien recibe el `503`.
+
+    Args:
+        driver_message: Mensaje devuelto por el controlador.
+
+    Returns:
+        No retorna valor.
+    """
 
     class LeakyCollection:
         async def create_indexes(self, models: list[object]) -> list[str]:
+            """Lanza un error con un mensaje que no debe mostrarse.
+
+            Args:
+                models: Modelos de índice que se van a crear.
+
+            Returns:
+                No retorna valor.
+            """
             raise OperationFailure(driver_message)
 
     with pytest.raises(AuditStorageError) as failure:
@@ -313,12 +352,20 @@ async def test_ensure_indexes_never_leaks_what_the_driver_said(
 
 
 async def test_ensure_indexes_does_not_swallow_a_programming_error() -> None:
-    """Si pasáramos una lista de `IndexModel` mal construida, un `TypeError` es un
-    bug nuestro y no una caída de Mongo: traducirlo a `503` lo escondería detrás de
-    un reintento que no puede arreglarlo."""
+    """Si pasáramos una lista de `IndexModel` mal construida, un `TypeError` es un bug
+    nuestro y no una caída de Mongo: traducirlo a `503` lo escondería d...
+    """
 
     class ExplodingCollection:
         async def create_indexes(self, models: list[object]) -> list[str]:
+            """Lanza un error de programación al crear índices.
+
+            Args:
+                models: Modelos de índice que se van a crear.
+
+            Returns:
+                No retorna valor.
+            """
             raise TypeError("models no es una lista de IndexModel")
 
     with pytest.raises(TypeError):

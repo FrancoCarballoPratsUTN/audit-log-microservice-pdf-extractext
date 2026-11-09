@@ -1,12 +1,4 @@
-"""Composition root: cablea configuración, handlers, middleware y routers.
-
-`create_app` resuelve la configuración y construye la app; nada más en el
-servicio importa entre capas. `import app.main` no necesita entorno, y la
-fábrica falla al arrancar si falta `SERVICE_API_TOKEN` (SPEC §3.6).
-
-El `lifespan` toca la red (SPEC §6.5): abre Mongo y registra en Consul tras
-resolver la config, porque `add_middleware` no admite cambios post-arranque.
-"""
+"""Crea la aplicación y controla su arranque y cierre."""
 
 import asyncio
 import logging
@@ -34,6 +26,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Prepara MongoDB y Consul al arrancar y los cierra al salir.
+
+    Args:
+        app: Aplicación FastAPI.
+
+    Returns:
+        No retorna valor.
+    """
     settings: Settings = app.state.settings
     client = open_client(settings)
     app.state.mongo_client = client
@@ -52,6 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deregistered = False
 
     def deregister() -> None:
+        """Quita el servicio de Consul una sola vez."""
         nonlocal deregistered
         if deregistered or registration is None:
             return
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """Construye y configura la aplicación FastAPI."""
     settings = load_settings()
     configure_logging(settings.log_level)
 

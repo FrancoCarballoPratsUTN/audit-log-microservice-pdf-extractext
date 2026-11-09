@@ -1,13 +1,4 @@
-"""Cuerpos problem details de RFC 9457.
-
-El único sitio donde un error de dominio se convierte en bytes sobre el cable. El
-cliente de Go parsea todo cuerpo con `status >= 300` esperando `type`, `title`,
-`status` y `detail` (SPEC §2.6), así que un error que salga de este servicio de
-otra forma le cuesta un `502` al orquestador.
-
-Aquí no se toca ningún logger: la causa concreta de un fallo pertenece al log de
-quien lo capturó, nunca a la respuesta.
-"""
+"""Crea respuestas de error con el formato estándar."""
 
 from typing import Any
 
@@ -20,18 +11,14 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 
 
 def build_problem(error: ServiceError, *, instance: str) -> ProblemDetails:
-    """Rellenar un cuerpo de problema a partir de un error de dominio.
-
-    `detail` explica *esta* ocurrencia y viene del error; `title` se mantiene
-    genérico para que dos ocurrencias del mismo problema comparen iguales
-    (SPEC §7.1).
+    """Crea el cuerpo de error con el formato estándar.
 
     Args:
-        error: El error de dominio que se reporta.
-        instance: Path de la petición, sin host y sin valores de query.
+        error: Error que se va a lanzar o comprobar.
+        instance: Ruta de la petición que produjo el error.
 
     Returns:
-        El cuerpo a serializar.
+        Los datos del error listos para enviar.
     """
     return ProblemDetails(
         type=error.type_uri,
@@ -44,15 +31,14 @@ def build_problem(error: ServiceError, *, instance: str) -> ProblemDetails:
 
 
 def problem_response(error: ServiceError, *, instance: str) -> JSONResponse:
-    """Serializar un error de dominio como `application/problem+json`.
+    """Convierte un error en una respuesta JSON.
 
     Args:
-        error: El error de dominio que se reporta.
-        instance: Path de la petición, sin host y sin valores de query.
+        error: Error que se va a lanzar o comprobar.
+        instance: Ruta de la petición que produjo el error.
 
     Returns:
-        Una respuesta con el código de estado propio del error y las cabeceras
-        que éste exige.
+        La respuesta HTTP con el error.
     """
     body: dict[str, Any] = build_problem(error, instance=instance).model_dump()
     return JSONResponse(

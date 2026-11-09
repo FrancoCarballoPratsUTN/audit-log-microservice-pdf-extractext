@@ -1,5 +1,4 @@
-"""Configuración y registro de Consul."""
-
+"""Pruebas de la configuración y el registro en Consul."""
 import pytest
 
 from app.config import load_settings as _load_settings
@@ -10,6 +9,14 @@ from tests.unit._main_common import TOKEN
 def test_consul_configuration_is_loaded_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Comprueba que la configuración de Consul se carga cuando está activa.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+
+    Returns:
+        No retorna valor.
+    """
     monkeypatch.setenv("CONSUL_ENABLED", "true")
     monkeypatch.setenv("CONSUL_HTTP_ADDR", "http://consul:8500")
     monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")
@@ -25,6 +32,14 @@ def test_consul_configuration_is_loaded_when_enabled(
 def test_consul_registration_builds_the_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Comprueba que el registro de Consul construye los datos correctos.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+
+    Returns:
+        No retorna valor.
+    """
     monkeypatch.setenv("CONSUL_ENABLED", "true")
     monkeypatch.setenv("CONSUL_HTTP_ADDR", "http://consul:8500")
     monkeypatch.setenv("CONSUL_HTTP_TOKEN", "consul-token")

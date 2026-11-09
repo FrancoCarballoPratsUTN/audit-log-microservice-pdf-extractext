@@ -1,1 +1,1 @@
-"""Presentadores de respuesta de la Capa 1."""
+"""Convierte resultados del servicio en respuestas HTTP."""

@@ -1,17 +1,4 @@
-"""Esquemas: la forma del contrato de la API.
-
-Tres modelos, una función cada uno: lo que envía el emisor, lo que devuelve este
-servicio y cómo se ve un error en el cable (RFC 9457).
-
-Dos decisiones de aquí protegen al cliente de Go, y ambas son invisibles cuando
-funcionan:
-
-- `_id` se declara con `serialization_alias`. Sin él Pydantic emite `id`, el
-  `models.AuditLog.ID string` de Go se queda vacío y **nada falla en voz alta**
-  (SPEC §2.5 H3).
-- `details` es `Any`, no `dict`. El campo del emisor es `any` (SPEC §2.5 H4), y
-  estrecharlo rechazaría justamente las extensiones que el contrato permite.
-"""
+"""Pruebas de los datos de entrada y salida."""
 
 from datetime import UTC, datetime
 
@@ -37,6 +24,7 @@ VALID_EVENT = {
 
 
 def test_valid_event_is_accepted() -> None:
+    """Comprueba que un evento válido se acepta."""
     event = AuditEventRequest(**VALID_EVENT)
     assert event.action == "pdf.extract"
     assert event.entity_type == "document"
@@ -46,7 +34,8 @@ def test_valid_event_is_accepted() -> None:
 
 def test_performed_at_keeps_the_offset_of_the_emitter() -> None:
     """El instante almacenado es el reloj del emisor, no el de este servicio.
-    Convertirlo a UTC aquí reescribiría en silencio lo que ocurrió (SPEC §5.4)."""
+    Convertirlo a UTC aquí reescribiría en silencio lo que ocurrió.
+    """
     event = AuditEventRequest(
         **{**VALID_EVENT, "performed_at": "2026-10-05T14:34:56+02:00"}
     )
@@ -54,27 +43,44 @@ def test_performed_at_keeps_the_offset_of_the_emitter() -> None:
 
 
 def test_performed_at_without_offset_is_rejected() -> None:
+    """Comprueba que una fecha sin zona horaria se rechaza."""
     with pytest.raises(PydanticValidationError):
         AuditEventRequest(**{**VALID_EVENT, "performed_at": "2026-10-05T12:34:56"})
 
 
 @pytest.mark.parametrize("field", ["action", "entity_type", "checksum"])
 def test_empty_identifier_fields_are_rejected(field: str) -> None:
+    """Comprueba que los campos identificadores vacíos se rechazan.
+
+    Args:
+        field: Nombre del campo.
+
+    Returns:
+        No retorna valor.
+    """
     with pytest.raises(PydanticValidationError):
         AuditEventRequest(**{**VALID_EVENT, field: ""})
 
 
 @pytest.mark.parametrize("field", ["action", "entity_type", "checksum"])
 def test_missing_identifier_fields_are_rejected(field: str) -> None:
+    """Comprueba que los campos identificadores ausentes se rechazan.
+
+    Args:
+        field: Nombre del campo.
+
+    Returns:
+        No retorna valor.
+    """
     payload = {key: value for key, value in VALID_EVENT.items() if key != field}
     with pytest.raises(PydanticValidationError):
         AuditEventRequest(**payload)
 
 
 def test_unknown_top_level_key_is_rejected() -> None:
-    """`extra="forbid"` (SPEC §3.4). Un `201` que deja caer `user_id` en
-    silencio es el peor fallo posible en una auditoría: invisible y
-    permanente."""
+    """`extra="forbid"`. Un `201` que deja caer `user_id` en silencio es el peor fallo
+    posible en una auditoría: invisible y permanente.
+    """
     with pytest.raises(PydanticValidationError):
         AuditEventRequest(**{**VALID_EVENT, "user_id": "u-1"})
 
@@ -91,12 +97,19 @@ def test_details_may_be_absent() -> None:
 )
 def test_details_accepts_any_json_value(details: object) -> None:
     """El emisor declara `Details any`; cualquier cosa más estrecha rechazaría las
-    extensiones que el contrato ya permite (SPEC §2.5 H4)."""
+    extensiones que el contrato ya permite.
+
+    Args:
+        details: Datos adicionales del evento.
+
+    Returns:
+        No retorna valor.
+    """
     assert AuditEventRequest(**{**VALID_EVENT, "details": details}).details == details
 
 
 def test_response_serializes_id_under_underscore_id() -> None:
-    """Todo el sentido del alias: Go lee `ID string` (SPEC §2.5 H3)."""
+    """Todo el sentido del alias: Go lee `ID string`."""
     payload = {
         "_id": "6f1c9a2b3d4e5f60718293a4",
         "action": "pdf.extract",
@@ -113,6 +126,7 @@ def test_response_serializes_id_under_underscore_id() -> None:
 
 
 def test_response_carries_the_seven_fields_the_go_client_decodes() -> None:
+    """Comprueba que la respuesta incluye los siete campos del cliente."""
     payload = {
         "_id": "6f1c9a2b3d4e5f60718293a4",
         "action": "text.delete",
@@ -136,9 +150,7 @@ def test_response_carries_the_seven_fields_the_go_client_decodes() -> None:
 
 
 def test_response_dates_are_strings_not_datetimes() -> None:
-    """El formato RFC 3339 lo pone `to_wire_fields`. Dejar que Pydantic
-    reformatee un `datetime` arriesgaría un `+00:00` o relleno de microsegundos,
-    y el formato tiene que llegar a Go byte a byte."""
+    """El formato RFC 3339 lo pone `to_wire_fields`."""
     field = AuditLogResponse.model_fields["performed_at"]
     assert field.annotation is str
 
@@ -180,6 +192,7 @@ def test_read_and_write_from_log_use_the_same_wire_fields() -> None:
 
 
 def test_response_from_log_marks_a_replay() -> None:
+    """Comprueba que la respuesta marca un duplicado."""
     log = AuditLog(
         id="6f1c9a2b3d4e5f60718293a4",
         action="pdf.extract",
@@ -193,8 +206,9 @@ def test_response_from_log_marks_a_replay() -> None:
 
 
 def test_problem_details_requires_the_five_canonical_members() -> None:
-    """RFC 9457 §3.1 nombra cinco; `code` es la extensión de §3.2. Faltar cualquiera
-    de ellos rompería el `ParseProblem` del cliente de Go (SPEC §2.6)."""
+    """RFC 9457 §3.1 nombra cinco; `code` es la extensión de §3.2. Faltar cualquiera de
+    ellos rompería el `ParseProblem` del cliente de Go.
+    """
     problem = ProblemDetails(
         type="/problems/validation_error",
         title="Request validation error",
@@ -214,7 +228,8 @@ def test_problem_details_requires_the_five_canonical_members() -> None:
 
 
 def test_problem_details_is_a_plain_model() -> None:
-    """Es un cuerpo, no un objeto de dominio: no debe heredar la jerarquía de
-    errores, cuyos metadatos son justamente lo que rellena estos campos."""
+    """Es un cuerpo, no un objeto de dominio: no debe heredar la jerarquía de errores,
+    cuyos metadatos son justamente lo que rellena estos campos.
+    """
     assert issubclass(ProblemDetails, BaseModel)
     assert not issubclass(ProblemDetails, Exception)

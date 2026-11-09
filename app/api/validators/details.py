@@ -1,4 +1,4 @@
-"""Validación del campo `details`"""
+"""Revisa que los detalles se puedan guardar."""
 
 import json
 from typing import Any
@@ -12,7 +12,14 @@ BSON_MAX_NESTING = 100
 
 
 def json_details(details: Any) -> bytes:
-    """Serializar `details` como JSON estricto y contar sus bytes UTF-8."""
+    """Convierte los detalles a JSON y cuenta sus bytes.
+
+    Args:
+        details: Datos adicionales del evento.
+
+    Returns:
+        Los detalles codificados en UTF-8.
+    """
     return json.dumps(
         details,
         ensure_ascii=False,
@@ -22,7 +29,17 @@ def json_details(details: Any) -> bytes:
 
 
 def validate_bson_nesting(details: Any) -> None:
-    """Rechazar estructuras más profundas que el máximo de anidamiento BSON."""
+    """Rechaza detalles con demasiados niveles.
+
+    Args:
+        details: Datos adicionales del evento.
+
+    Returns:
+        No retorna valor.
+
+    Raises:
+        ValueError: Si los detalles superan la profundidad permitida.
+    """
     pending = [(details, 0)]
     while pending:
         value, depth = pending.pop()
@@ -35,7 +52,19 @@ def validate_bson_nesting(details: Any) -> None:
 
 
 def validate_details(details: Any, max_bytes: int) -> None:
-    """Validar que `details` es JSON/BSON válido y no excede `max_bytes`."""
+    """Comprueba que los detalles se puedan guardar y no sean muy grandes.
+
+    Args:
+        details: Datos adicionales del evento.
+        max_bytes: Tamaño máximo permitido.
+
+    Returns:
+        No retorna valor.
+
+    Raises:
+        ValidationError: Si los detalles no se pueden guardar.
+        PayloadTooLargeError: Si los detalles superan el tamaño máximo.
+    """
     try:
         validate_bson_nesting(details)
         encoded = json_details(details)

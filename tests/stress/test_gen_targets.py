@@ -1,11 +1,4 @@
-"""Tests de :mod:`tests.stress.scripts.gen_targets`.
-
-Cubre la lógica pura (unicidad de checksums, serialización de targets,
-escritura de ficheros) y el único efecto HTTP de la preparación (la siembra del
-set de lectura, con un cliente mock). El stress real lo hacen k6 y vegeta, no
-pytest: aquí sólo se garantiza que los targets que Vegeta atacará tienen la
-forma que el contrato de AUDA exige.
-"""
+"""Pruebas del generador de peticiones de carga."""
 
 from __future__ import annotations
 
@@ -31,19 +24,41 @@ RFC3339_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 
 def targets_of(targets: str) -> list[dict]:
-    """Decodifica el fichero de targets: una línea es una petición."""
+    """Decodifica el fichero de targets: una línea es una petición.
+
+    Args:
+        targets: Lista de objetivos.
+
+    Returns:
+        La lista de objetivos leídos.
+    """
     return [json.loads(line) for line in targets.splitlines()]
 
 
 def body_of(target: dict) -> dict:
-    """Decodifica el cuerpo base64 de un target."""
+    """Decodifica el cuerpo base64 de un target.
+
+    Args:
+        target: Objetivo de la prueba.
+
+    Returns:
+        El cuerpo decodificado.
+    """
     return json.loads(base64.b64decode(target["body"]))
 
 
 def fake_client(*statuses: int) -> Mock:
-    """Cliente httpx falso: responde un estado por llamada, en orden."""
+    """Cliente httpx falso: responde un estado por llamada, en orden.
+
+    Args:
+        *statuses: Argumentos adicionales.
+
+    Returns:
+        El cliente falso.
+    """
 
     def responses() -> list[Mock]:
+        """Devuelve las respuestas simuladas."""
         return [Mock(status_code=status) for status in statuses]
 
     client = Mock()
@@ -52,6 +67,7 @@ def fake_client(*statuses: int) -> Mock:
 
 
 def test_checksums_are_unique_and_reproducible():
+    """Comprueba que los checksums son únicos y reproducibles."""
     first = generate_checksums(1000, seed=42)
 
     assert first == generate_checksums(1000, seed=42)
@@ -61,11 +77,13 @@ def test_checksums_are_unique_and_reproducible():
 
 
 def test_checksums_reject_a_non_positive_count():
+    """Comprueba que un número de checksums no positivo se rechaza."""
     with pytest.raises(ValueError, match="count"):
         generate_checksums(0)
 
 
 def test_the_post_and_read_salts_produce_disjoint_sets():
+    """Comprueba que las sales de escritura y lectura no coinciden."""
     posted = set(generate_checksums(100, 7, salt="post"))
     read = set(generate_checksums(100, 7, salt="read"))
 
@@ -73,6 +91,7 @@ def test_the_post_and_read_salts_produce_disjoint_sets():
 
 
 def test_post_target_is_a_base64_json_line():
+    """Comprueba que el objetivo POST es una línea JSON en base64."""
     (target,) = targets_of(build_targets("POST", BASE_URL, TOKEN, ["abc123"]))
 
     assert target["method"] == "POST"
@@ -87,12 +106,14 @@ def test_post_target_is_a_base64_json_line():
 
 
 def test_post_targets_carry_distinct_performed_at():
+    """Comprueba que cada objetivo POST lleva una fecha distinta."""
     first, second = targets_of(build_targets("POST", BASE_URL, TOKEN, ["a", "b"]))
 
     assert body_of(first)["performed_at"] != body_of(second)["performed_at"]
 
 
 def test_list_target_uses_the_global_list_url_without_a_body():
+    """Comprueba que el objetivo de listado usa la URL global y no lleva cuerpo."""
     targets = targets_of(build_targets("LIST", BASE_URL, TOKEN, ["a", "b"]))
 
     assert len(targets) == 2
@@ -107,6 +128,7 @@ def test_list_target_uses_the_global_list_url_without_a_body():
 
 
 def test_bychecksum_target_uses_the_checksum_path():
+    """Comprueba que el objetivo por checksum usa la ruta correcta."""
     (target,) = targets_of(build_targets("BYCHECKSUM", BASE_URL, TOKEN, ["abc123"]))
 
     assert target["method"] == "GET"
@@ -116,11 +138,20 @@ def test_bychecksum_target_uses_the_checksum_path():
 
 
 def test_an_unknown_operation_is_rejected():
+    """Comprueba que una operación desconocida se rechaza."""
     with pytest.raises(ValueError, match="PATCH"):
         build_targets("PATCH", BASE_URL, TOKEN, ["abc123"])
 
 
 def test_write_targets_writes_one_file_per_operation(tmp_path):
+    """Comprueba que se escribe un archivo por operación.
+
+    Args:
+        tmp_path: Ruta temporal para archivos de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     written = write_targets(
         tmp_path,
         BASE_URL,
@@ -140,6 +171,7 @@ def test_write_targets_writes_one_file_per_operation(tmp_path):
 
 
 def test_load_documents_counts_created_and_replayed():
+    """Comprueba que se cuentan los eventos creados y repetidos."""
     client = fake_client(201, 200)
 
     report = load_documents(BASE_URL, TOKEN, ["abc123", "def456"], client=client)
@@ -148,6 +180,7 @@ def test_load_documents_counts_created_and_replayed():
 
 
 def test_load_documents_propagates_an_unexpected_status():
+    """Comprueba que un estado inesperado se propaga."""
     client = Mock()
     client.post.return_value = Mock(
         status_code=401,
@@ -161,6 +194,16 @@ def test_load_documents_propagates_an_unexpected_status():
 
 
 def test_cli_needs_the_token_and_writes_nothing(monkeypatch, tmp_path, capsys):
+    """Comprueba que la herramienta exige el token y no escribe archivos.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+        tmp_path: Ruta temporal para archivos de prueba.
+        capsys: Capturador de la salida de pytest.
+
+    Returns:
+        No retorna valor.
+    """
     monkeypatch.delenv("SERVICE_API_TOKEN", raising=False)
 
     exit_code = main(["--count", "2", "--out-dir", str(tmp_path)])
@@ -171,6 +214,15 @@ def test_cli_needs_the_token_and_writes_nothing(monkeypatch, tmp_path, capsys):
 
 
 def test_cli_writes_the_three_files_with_a_token(monkeypatch, tmp_path):
+    """Comprueba que la herramienta escribe los tres archivos con token.
+
+    Args:
+        monkeypatch: Utilidad de pytest para sustituir valores.
+        tmp_path: Ruta temporal para archivos de prueba.
+
+    Returns:
+        No retorna valor.
+    """
     monkeypatch.setenv("SERVICE_API_TOKEN", TOKEN)
 
     exit_code = main(["--count", "5", "--seed", "42", "--out-dir", str(tmp_path)])

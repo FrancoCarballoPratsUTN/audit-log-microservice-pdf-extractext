@@ -1,9 +1,4 @@
-"""Montar el stack de middlewares en el orden del contrato.
-
-`add_middleware` **antepone**, así que se añaden del más interno al más
-externo: `BearerAuthMiddleware` queda *outermost* y su `401` precede al `415`
-y al `413`; el `400` de la validación llega después, tras el enrutado.
-"""
+"""Instala los middlewares en el orden correcto."""
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -18,7 +13,15 @@ CORS_METHODS = ["GET", "POST", "OPTIONS"]
 
 
 def install_middleware(app: FastAPI, *, max_body_bytes: int) -> None:
-    """Enganchar los middlewares en el orden del contrato (SPEC §4.3)."""
+    """Instala los middlewares en el orden correcto.
+
+    Args:
+        app: Aplicación FastAPI.
+        max_body_bytes: Tamaño máximo del cuerpo.
+
+    Returns:
+        No retorna valor.
+    """
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(
         CORSMiddleware,

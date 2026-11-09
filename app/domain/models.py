@@ -1,9 +1,4 @@
-"""Modelo de dominio.
-
-Separamos el contrato del dominio del esquema HTTP (Capa 1) y del documento Mongo
-(Capa 3). Esto cumple con las 3 capas con dependencia hacia adentro y evita que
-las capas superiores conozcan detalles de PyMongo (SPEC §12).
-"""
+"""Define los datos principales de una auditoría."""
 
 from __future__ import annotations
 
@@ -13,41 +8,66 @@ from typing import Any
 
 
 def _ensure_utc(value: datetime) -> datetime:
-    """Garantiza que las fechas sean UTC-aware."""
+    """Convierte una fecha a UTC con zona horaria.
+
+    Args:
+        value: Valor que se va a revisar.
+
+    Returns:
+        La fecha en UTC.
+    """
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
 
 
 def _to_millis(value: datetime) -> datetime:
-    """Normaliza a UTC y trunca los microsegundos a milisegundos.
+    """Convierte a UTC y recorta a milisegundos.
 
-    La identidad y la deduplicación usan granularidad de 1 ms. Se trunca, no se
-    redondea: `.123456` y `.123000` producen la misma identidad.
+    Args:
+        value: Valor que se va a revisar.
+
+    Returns:
+        La fecha normalizada a milisegundos.
     """
     utc = _ensure_utc(value)
     return utc.replace(microsecond=(utc.microsecond // 1000) * 1000)
 
 
 def _normalize_details(details: Any) -> Any:
-    """`details` ausente es `{}`; cualquier otro valor se conserva."""
+    """Convierte los detalles ausentes en un diccionario vacío.
+
+    Args:
+        details: Datos adicionales del evento.
+
+    Returns:
+        Los detalles normalizados.
+    """
     return {} if details is None else details
 
 
 def _normalize_domain_instance(instance: object, **fields: object) -> None:
-    """Normalizar campos de una instancia de dominio frozen.
+    """Aplica las funciones de normalización a una instancia.
 
-    El dataclass es `frozen`, así que se usa `object.__setattr__`. Cada campo se
-    normaliza con la función pasada (p. ej. `_to_millis` o `_normalize_details`).
+    Args:
+        instance: Ruta de la petición que produjo el error.
+        **fields: Argumentos adicionales.
+
+    Returns:
+        No retorna valor.
     """
     for name, func in fields.items():
         object.__setattr__(instance, name, func(getattr(instance, name)))
 
 
 def rfc3339_utc(value: datetime) -> str:
-    """RFC 3339 en UTC con `Z` y milisegundos, truncando los microsegundos.
+    """Formatea una fecha en UTC con milisegundos.
 
-    Es la representación que parsea `time.Time` del orquestador (§2.4).
+    Args:
+        value: Valor que se va a revisar.
+
+    Returns:
+        La fecha como texto RFC 3339.
     """
     utc = value.astimezone(UTC)
     return f"{utc:%Y-%m-%dT%H:%M:%S}.{utc.microsecond // 1000:03d}Z"
@@ -64,6 +84,7 @@ class CreateAuditLogRequest:
     details: Any = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Normaliza la fecha y los detalles al crear la petición."""
         _normalize_domain_instance(
             self, performed_at=_to_millis, details=_normalize_details
         )
@@ -82,6 +103,7 @@ class AuditLog:
     details: Any = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        """Normaliza las fechas y los detalles del registro."""
         _normalize_domain_instance(
             self,
             performed_at=_to_millis,
@@ -91,7 +113,14 @@ class AuditLog:
 
 
 def to_wire_fields(log: AuditLog) -> dict[str, Any]:
-    """Los siete campos que comparten la escritura y la lectura."""
+    """Devuelve los siete campos que se envían al cliente.
+
+    Args:
+        log: Registro de auditoría.
+
+    Returns:
+        Un diccionario con los campos del registro.
+    """
     return {
         "_id": log.id,
         "action": log.action,

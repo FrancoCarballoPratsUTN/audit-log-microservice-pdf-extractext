@@ -1,18 +1,4 @@
-"""Errores de dominio.
-
-La Capa 3 los lanza, la Capa 2 decide y la Capa 1 los traduce a un cuerpo de
-problem details. Aquí no se importa FastAPI: un error que conoce su propio
-código HTTP invertiría la dependencia, y SPEC §3.1 exige lo contrario.
-
-Cada error lleva sus metadatos de cable (`status`, `code`, `type_uri`, `title`)
-como atributos de clase. Así la traducción de `app/api/exception_handlers.py` es
-declarativa en vez de una escalera de `if/else`, y `tests/unit/test_errors.py`
-fija esos valores contra la matriz de SPEC §7.2.
-
-`detail` es por instancia: explica *esta* ocurrencia, mientras `title` se
-mantiene genérico para que los clientes puedan comparar fallos por `title`
-(SPEC §7.1).
-"""
+"""Define los errores del servicio y sus datos."""
 
 from typing import ClassVar
 
@@ -37,10 +23,19 @@ class ServiceError(Exception):
     headers: ClassVar[dict[str, str] | None] = None
 
     def __init__(self, detail: str | None = None) -> None:
+        """Crea un error con un detalle opcional.
+
+        Args:
+            detail: Detalle del error.
+
+        Returns:
+            No retorna valor.
+        """
         self.detail = detail if detail is not None else self.default_detail
         super().__init__(self.detail)
 
     def __str__(self) -> str:
+        """Devuelve el nombre del error y su detalle."""
         return f"{type(self).__name__}: {self.detail}"
 
 

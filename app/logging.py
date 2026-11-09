@@ -1,13 +1,16 @@
-"""Configuración del logging de la aplicación."""
+"""Configura los mensajes de registro de la aplicación."""
 
 import logging
 
 
 def configure_logging(level: str) -> None:
-    """Configurar el logging raíz una sola vez al arrancar.
+    """Configura el nivel y el formato de los registros.
 
-    `basicConfig` no hace nada si ya hay handlers; `setLevel` reaplica el nivel
-    para que surta efecto aunque ya exista configuración previa.
+    Args:
+        level: Nivel de registro.
+
+    Returns:
+        No retorna valor.
     """
     logging.basicConfig(
         level=level,

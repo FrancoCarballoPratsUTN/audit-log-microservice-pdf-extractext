@@ -1,4 +1,4 @@
-"""Stack de middlewares de transporte: uno por archivo, el orden en `install.py`."""
+"""Middlewares que revisan y registran las peticiones."""
 
 from app.api.middleware.access_log import AccessLogMiddleware
 from app.api.middleware.body_size import BodySizeLimitMiddleware, parse_content_length

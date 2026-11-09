@@ -1,11 +1,4 @@
-"""`MongoAuditLogRepository` sin Mongo: el mapeo de SPEC §6.4, rama a rama.
-
-Las excepciones se fabrican con las clases que PyMongo lanza de verdad, porque
-la traducción se define sobre esas clases y no sobre nuestros inventos. Aquí se
-fija qué sale de cada rama del `try`; la comprobación contra un servidor real
-(índice único, `ObjectId`, fechas BSON) vive en
-`tests/integration/repositories/test_mongo_audit_log_repository.py`.
-"""
+"""Pruebas del repositorio sin MongoDB real."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -24,7 +17,14 @@ CHECKSUM = "9f86d081884c7d659a2feaa0c55ad015"
 
 
 def make_request(**overrides: object) -> CreateAuditLogRequest:
-    """Petición válida, con lo que pida el test cambiado."""
+    """Petición válida, con lo que pida el test cambiado.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     values: dict[str, object] = {
         "action": "pdf.extract",
         "entity_type": "document",
@@ -36,7 +36,14 @@ def make_request(**overrides: object) -> CreateAuditLogRequest:
 
 
 def make_document(**overrides: object) -> dict[str, object]:
-    """Documento ya guardado, con fechas *naive* como las devuelve Mongo."""
+    """Documento ya guardado, con fechas *naive* como las devuelve Mongo.
+
+    Args:
+        **overrides: Argumentos adicionales.
+
+    Returns:
+        El objeto creado para la prueba.
+    """
     document: dict[str, object] = {
         "_id": ObjectId(),
         "action": "pdf.extract",
@@ -61,6 +68,17 @@ class RecordingCollection:
         find_error: Exception | None = None,
         documents: list[dict[str, object]] | None = None,
     ) -> None:
+        """Crea la colección de prueba con sus datos y errores.
+
+        Args:
+            insert_error: Error que se lanzará al insertar.
+            find_result: Resultado de la búsqueda de duplicados.
+            find_error: Error que se lanzará al buscar.
+            documents: Documentos que se van a guardar.
+
+        Returns:
+            No retorna valor.
+        """
         self.insert_error = insert_error
         self.find_result = find_result
         self.find_error = find_error
@@ -72,17 +90,41 @@ class RecordingCollection:
         self.limits: list[int] = []
 
     async def insert_one(self, document: dict[str, object]) -> None:
+        """Registra el documento y devuelve un identificador.
+
+        Args:
+            document: Documento de MongoDB.
+
+        Returns:
+            No retorna valor.
+        """
         if self.insert_error is not None:
             raise self.insert_error
         self.inserted.append(document)
 
     async def find_one(self, query: dict[str, object]) -> dict[str, object] | None:
+        """Devuelve el resultado preparado de la búsqueda.
+
+        Args:
+            query: Consulta de MongoDB.
+
+        Returns:
+            El documento encontrado o None.
+        """
         self.queries.append(query)
         if self.find_error is not None:
             raise self.find_error
         return self.find_result
 
     def find(self, query: dict[str, object]) -> RecordingCursor:
+        """Devuelve un cursor sobre los documentos guardados.
+
+        Args:
+            query: Consulta de MongoDB.
+
+        Returns:
+            El cursor de la consulta.
+        """
         self.queries.append(query)
         return RecordingCursor(self)
 
@@ -97,25 +139,59 @@ class RecordingCursor:
     `tests/integration/api/test_list_audit_logs.py`."""
 
     def __init__(self, collection: RecordingCollection) -> None:
+        """Crea el cursor sobre la colección indicada.
+
+        Args:
+            collection: Colección de MongoDB.
+
+        Returns:
+            No retorna valor.
+        """
         self._collection = collection
 
     def sort(self, spec: object) -> RecordingCursor:
+        """Guarda el orden solicitado.
+
+        Args:
+            spec: Definición del índice.
+
+        Returns:
+            El mismo cursor, ya ordenado.
+        """
         self._collection.sorts.append(spec)
         return self
 
     def skip(self, value: int) -> RecordingCursor:
+        """Guarda la cantidad que se va a omitir.
+
+        Args:
+            value: Valor que se va a revisar.
+
+        Returns:
+            El mismo cursor, ya desplazado.
+        """
         self._collection.skips.append(value)
         return self
 
     def limit(self, value: int) -> RecordingCursor:
+        """Guarda la cantidad máxima de resultados.
+
+        Args:
+            value: Valor que se va a revisar.
+
+        Returns:
+            El mismo cursor, ya limitado.
+        """
         self._collection.limits.append(value)
         return self
 
     def __aiter__(self) -> RecordingCursor:
+        """Devuelve el iterador asíncrono."""
         self._index = 0
         return self
 
     async def __anext__(self) -> dict[str, object]:
+        """Devuelve el siguiente documento."""
         if self._collection.find_error is not None:
             raise self._collection.find_error
         if self._index >= len(self._collection.documents):
@@ -127,7 +203,8 @@ class RecordingCursor:
 
 async def test_insert_stores_the_document_and_returns_the_stored_log() -> None:
     """El registro devuelto es el que acaba en la colección: mismo `_id`, misma
-    identidad y los detalles tal cual llegaron."""
+    identidad y los detalles tal cual llegaron.
+    """
     collection = RecordingCollection()
     request = make_request()
 
@@ -143,9 +220,8 @@ async def test_insert_stores_the_document_and_returns_the_stored_log() -> None:
 
 
 async def test_insert_stamps_received_at_with_the_server_clock() -> None:
-    """No es el `performed_at` del evento: es cuándo lo vimos nosotros, y de
-    eso depende la ventana de retención y el orden global de §6.3. El fake no
-    codifica BSON, así que se compara a la precisión de 1 ms que persiste Mongo.
+    """No es el `performed_at` del evento: es cuándo lo vimos nosotros, y de eso depende
+    la ventana de retención y el orden global de §6.3.
     """
     collection = RecordingCollection()
 
@@ -159,8 +235,9 @@ async def test_insert_stamps_received_at_with_the_server_clock() -> None:
 
 
 async def test_insert_writes_an_empty_object_when_details_are_absent() -> None:
-    """SPEC §6.2: `null` en `details` viola el esquema. La conversión ocurre
-    antes de que el driver vea el documento, no después."""
+    """`null` en `details` viola el esquema. La conversión ocurre antes de que el driver
+    vea el documento, no después.
+    """
     collection = RecordingCollection()
 
     await MongoAuditLogRepository(collection).insert(make_request(details=None))
@@ -169,9 +246,7 @@ async def test_insert_writes_an_empty_object_when_details_are_absent() -> None:
 
 
 async def test_a_duplicate_identity_signals_a_replay() -> None:
-    """Barrera 2 de §5.3: el índice único habla y la traducción es una señal,
-    no un `500`. Sin ella, el segundo pico de la carrera respondería con un
-    error donde el Orquestador espera el `200` idempotente."""
+    """El índice único habla y la traducción es una señal, no un `500`."""
     collection = RecordingCollection(
         insert_error=DuplicateKeyError("E11000 duplicate key error")
     )
@@ -181,9 +256,8 @@ async def test_a_duplicate_identity_signals_a_replay() -> None:
 
 
 async def test_a_document_that_is_too_large_is_a_payload_error() -> None:
-    """SPEC §6.4: el límite de 16 MiB de BSON es `413`, el mismo código que el
-    del body de 1 MiB. Un `503` haría que el Orquestador reintentara para
-    siempre un documento que nunca cabrá."""
+    """El límite de 16 MiB de BSON es `413`, el mismo código que el del body de 1 MiB.
+    """
     collection = RecordingCollection(insert_error=DocumentTooLarge("BSON too large"))
 
     with pytest.raises(PayloadTooLargeError):
@@ -191,8 +265,9 @@ async def test_a_document_that_is_too_large_is_a_payload_error() -> None:
 
 
 async def test_invalid_bson_is_a_validation_error() -> None:
-    """Una clave con NUL o una estructura que BSON no acepta es un fallo de la
-    petición, no del almacenamiento: `400`, nunca `500` (T19, H-03)."""
+    """Una clave con NUL o una estructura que BSON no acepta es un fallo de la petición,
+    no del almacenamiento: `400`, nunca `500` (T19, H-03).
+    """
     collection = RecordingCollection(
         insert_error=InvalidDocument("key 'a\\x00b' must not contain null characters")
     )
@@ -212,8 +287,9 @@ async def test_an_integer_beyond_bson_range_is_a_validation_error() -> None:
 
 
 async def test_details_nested_too_deeply_are_a_validation_error() -> None:
-    """El codificador BSON agota la pila antes que el JSON: ese anidamiento es
-    un `400`, no un `500` (T19)."""
+    """El codificador BSON agota la pila antes que el JSON: ese anidamiento es un `400`,
+    no un `500` (T19).
+    """
     collection = RecordingCollection(
         insert_error=RecursionError("Stack overflow while encoding an object to BSON")
     )
@@ -223,8 +299,9 @@ async def test_details_nested_too_deeply_are_a_validation_error() -> None:
 
 
 async def test_a_driver_failure_is_reported_as_a_storage_error() -> None:
-    """SPEC §6.4: cualquier otro `PyMongoError` es `503` reintentable, con un
-    `detail` nuestro y no el del driver (que trae `host:port`)."""
+    """Cualquier otro `PyMongoError` es `503` reintentable, con un `detail` nuestro y no
+    el del driver (que trae `host:port`).
+    """
     collection = RecordingCollection(insert_error=PyMongoError("localhost:27017 down"))
 
     with pytest.raises(AuditStorageError) as failure:
@@ -234,9 +311,9 @@ async def test_a_driver_failure_is_reported_as_a_storage_error() -> None:
 
 
 async def test_insert_does_not_translate_a_programming_error() -> None:
-    """Un `TypeError` es un bug nuestro: convertirlo en `503` haría que el
-    Orquestador reintente algo que nunca se arreglará solo, y escondería el
-    defecto detrás de un reintento."""
+    """Un `TypeError` es un bug nuestro: convertirlo en `503` haría que el Orquestador
+    reintente algo que nunca se arreglará solo, y escondería el defecto...
+    """
     collection = RecordingCollection(insert_error=TypeError("campo mal construido"))
 
     with pytest.raises(TypeError):
@@ -244,9 +321,9 @@ async def test_insert_does_not_translate_a_programming_error() -> None:
 
 
 async def test_find_replay_queries_exactly_the_identity_tuple() -> None:
-    """Los cuatro campos de la clave única de §6.3, ni uno más ni uno menos:
-    sin `performed_at` devolvería el primer evento del `action`, y sin
-    `entity_type` confundiría entidades con el mismo checksum."""
+    """Los cuatro campos de la clave única de §6.3, ni uno más ni uno menos: sin
+    `performed_at` devolvería el primer evento del `action`, y sin `entity_ty...
+    """
     collection = RecordingCollection(find_result=None)
 
     await MongoAuditLogRepository(collection).find_replay(
@@ -283,6 +360,8 @@ async def test_find_replay_returns_the_stored_log() -> None:
 
 
 async def test_find_replay_returns_none_when_nothing_matches() -> None:
+    """Comprueba que la búsqueda de duplicados devuelve None si no hay coincidencias.
+    """
     collection = RecordingCollection(find_result=None)
 
     found = await MongoAuditLogRepository(collection).find_replay(
@@ -296,8 +375,9 @@ async def test_find_replay_returns_none_when_nothing_matches() -> None:
 
 
 async def test_find_replay_reports_a_storage_failure() -> None:
-    """La lectura de la Barrera 1 falla igual que la escritura: mismo `503`,
-    porque quien no puede leer tampoco puede decidir si hay replay."""
+    """La lectura de la Barrera 1 falla igual que la escritura: mismo `503`, porque
+    quien no puede leer tampoco puede decidir si hay replay.
+    """
     collection = RecordingCollection(find_error=PyMongoError("localhost:27017 down"))
 
     with pytest.raises(AuditStorageError):
@@ -323,10 +403,9 @@ async def test_find_replay_does_not_translate_a_programming_error() -> None:
 
 
 async def test_list_sorts_by_performed_at_then_id_desc_and_pages() -> None:
-    """SPEC §8.1: el listado global no filtra —son todos los eventos— y pide
-    el orden exacto del índice compuesto de §6.3, con el `_id` descendente
-    como desempate. Sin esa clave, dos eventos simultáneos podían paginar de
-    forma distinta en dos llamadas idénticas."""
+    """El listado global no filtra —son todos los eventos— y pide el orden exacto del
+    índice compuesto de §6.3, con el `_id` descendente como d...
+    """
     collection = RecordingCollection(documents=[make_document()])
 
     await MongoAuditLogRepository(collection).list(skip=5, limit=20)
@@ -359,8 +438,9 @@ async def test_list_reports_a_storage_failure() -> None:
 
 
 async def test_list_does_not_translate_a_programming_error() -> None:
-    """Un fallo de mapeo (un documento sin los campos de §6.2) sube intacto:
-    no es una indisponibilidad del almacenamiento."""
+    """Un fallo de mapeo (un documento sin los campos de §6.2) sube intacto: no es una
+    indisponibilidad del almacenamiento.
+    """
     collection = RecordingCollection(documents=[{"_id": ObjectId()}])
 
     with pytest.raises(KeyError):
@@ -368,9 +448,9 @@ async def test_list_does_not_translate_a_programming_error() -> None:
 
 
 async def test_find_by_checksum_filters_and_sorts_without_pagination() -> None:
-    """SPEC §8.1 / D12: la consulta filtra sólo por `checksum` y ordena con la
-    misma clave que el índice compuesto de §6.3, **sin** `.skip()` ni
-    `.limit()` — el cliente Go no pagina el listado por checksum."""
+    """La consulta filtra sólo por `checksum` y ordena con la misma clave que el índice
+    compuesto de §6.3, **sin** `.skip()` ni `.limit()...
+    """
     collection = RecordingCollection(documents=[make_document()])
 
     await MongoAuditLogRepository(collection).find_by_checksum(CHECKSUM)
@@ -382,8 +462,9 @@ async def test_find_by_checksum_filters_and_sorts_without_pagination() -> None:
 
 
 async def test_find_by_checksum_returns_the_matches_as_domain_logs() -> None:
-    """Las coincidencias llegan como registros de dominio: `_id` hex y fechas
-    con zona, igual que en el listado global."""
+    """Las coincidencias llegan como registros de dominio: `_id` hex y fechas con zona,
+    igual que en el listado global.
+    """
     first = make_document()
     second = make_document(checksum="otro-checksum")
     collection = RecordingCollection(documents=[first, second])

@@ -1,5 +1,4 @@
-"""Traducción de excepciones de PyMongo a errores de dominio."""
-
+"""Traduce los errores de MongoDB a errores del servicio."""
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
@@ -16,16 +15,26 @@ STORAGE_UNAVAILABLE = "MongoDB is unavailable."
 
 
 def translate_pymongo_errors(func: Callable[..., T]) -> Callable[..., T]:
-    """Mapea errores del driver a errores de dominio.
+    """Convierte los errores de PyMongo en errores del servicio.
 
-    - `DuplicateKeyError` (11000) → `ReplayDetected` (señal de idempotencia).
-    - `DocumentTooLarge` → `PayloadTooLargeError` (413).
-    - `BSONError` / `OverflowError` / `RecursionError` → `ValidationError` (400).
-    - Cualquier otro `PyMongoError` → `AuditStorageError` (503).
+    Args:
+        func: Función que se va a proteger.
+
+    Returns:
+        La función con los errores traducidos.
     """
 
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> T:
+        """Ejecuta la función y traduce sus errores.
+
+        Args:
+            *args: Argumentos adicionales.
+            **kwargs: Argumentos adicionales.
+
+        Returns:
+            El resultado de la función.
+        """
         try:
             return await func(*args, **kwargs)
         except DuplicateKeyError as exc:

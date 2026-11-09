@@ -1,14 +1,4 @@
-"""Estructura del paquete y dirección de dependencias.
-
-La arquitectura de 3 capas no se sostiene por disciplina: es una restricción que
-se rompe en silencio. Un `from pymongo import ...` en `app/api/` compila, pasa
-los tests, y acopla la Capa 1 al driver. Estos tests fallan el día que alguien
-lo importa.
-
-Se inspecciona el código fuente con `ast` en vez de leer `sys.modules`: el estado
-de los módulos ya importados no distingue "esta capa importa pymongo" de "otra
-capa lo importó antes que yo".
-"""
+"""Pruebas de la estructura y dependencias del paquete."""
 
 import ast
 from pathlib import Path
@@ -21,7 +11,14 @@ LAYERS = ("api", "services", "repositories")
 
 
 def imported_modules(layer: str) -> set[str]:
-    """Módulos que importa `app/<layer>`, leídos del código fuente."""
+    """Módulos que importa `app/<layer>`, leídos del código fuente.
+
+    Args:
+        layer: Nombre de la capa del paquete.
+
+    Returns:
+        El conjunto de módulos importados.
+    """
     imported: set[str] = set()
     for source in (APP_DIR / layer).rglob("*.py"):
         tree = ast.parse(source.read_text(encoding="utf-8"))
@@ -35,13 +32,28 @@ def imported_modules(layer: str) -> set[str]:
 
 @pytest.mark.parametrize("layer", LAYERS)
 def test_layer_imports_without_error(layer: str) -> None:
+    """Comprueba que cada capa del paquete se puede importar.
+
+    Args:
+        layer: Nombre de la capa del paquete.
+
+    Returns:
+        No retorna valor.
+    """
     module = __import__(f"app.{layer}", fromlist=["__doc__"])
     assert module.__doc__, f"app/{layer} debe documentar su responsabilidad"
 
 
 @pytest.mark.parametrize("layer", ("api", "services"))
 def test_upper_layers_do_not_import_pymongo(layer: str) -> None:
-    """`pymongo` sólo puede aparecer en Capa 3."""
+    """`pymongo` sólo puede aparecer en Capa 3.
+
+    Args:
+        layer: Nombre de la capa del paquete.
+
+    Returns:
+        No retorna valor.
+    """
     offenders = {
         name for name in imported_modules(layer) if name.split(".")[0] == "pymongo"
     }
@@ -49,11 +61,7 @@ def test_upper_layers_do_not_import_pymongo(layer: str) -> None:
 
 
 def test_api_layer_does_not_import_pymongo_or_repositories() -> None:
-    """La Capa 1 no puede conocer el driver ni la Capa 3.
-
-    Se comprueba sobre toda la capa y no sobre un router concreto: un módulo
-    nuevo, como una sonda de readiness, no debe poder saltarse la regla.
-    """
+    """La Capa 1 no puede conocer el driver ni la Capa 3."""
     imported = imported_modules("api")
 
     assert not {name for name in imported if name.split(".")[0] == "pymongo"}, (
