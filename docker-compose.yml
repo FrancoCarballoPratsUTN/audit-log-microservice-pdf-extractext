@@ -44,7 +44,6 @@ services:
       - traefik.http.routers.audit.entrypoints=https
       - traefik.http.routers.audit.tls=true
       - traefik.http.services.audit.loadbalancer.server.port=8000
-      - traefik.http.services.audit.loadbalancer.retry.attempts=0
       # Healthcheck activo de Traefik: sólo enruta a réplicas con MongoDB listo.
       - traefik.http.services.audit.loadbalancer.healthcheck.path=/readyz
       - traefik.http.services.audit.loadbalancer.healthcheck.interval=10s
