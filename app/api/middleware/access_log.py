@@ -15,6 +15,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Medir, registrar y devolver; registrar también si algo revienta."""
+        request.app.state.active_requests = (
+            getattr(request.app.state, "active_requests", 0) + 1
+        )
         started = time.perf_counter()
         try:
             response = await call_next(request)
@@ -27,6 +30,8 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                 elapsed_ms,
             )
             raise
+        finally:
+            request.app.state.active_requests -= 1
 
         elapsed_ms = (time.perf_counter() - started) * 1000
         logger.info(

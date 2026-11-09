@@ -8,6 +8,7 @@ El `lifespan` toca la red (SPEC §6.5): abre Mongo y registra en Consul tras
 resolver la config, porque `add_middleware` no admite cambios post-arranque.
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.readiness_probe = ReadinessProbe(
         client, collection, retention_days=settings.retention_days
     )
+    app.state.active_requests = 0
 
     registration = consul_registration()
     if registration is not None:
@@ -74,6 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         deregister()
+        while app.state.active_requests > 0:
+            await asyncio.sleep(0.1)
         logger.info("application shutdown initiated: closing MongoDB client")
         await client.close()
         logger.info("application shutdown complete")
@@ -91,6 +95,7 @@ def create_app() -> FastAPI:
     app.include_router(audit_logs_router)
     app.state.settings = settings
     app.state.api_token = settings.service_api_token.get_secret_value()
+    app.state.active_requests = 0
     return app
 
 
