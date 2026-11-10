@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 
 class ConsulConfigurationError(RuntimeError):
-    """Consul could not provide a valid configuration prefix."""
+    """Consul no pudo proporcionar un prefijo de configuración válido."""
 
 
 def load_prefix(
@@ -37,7 +37,7 @@ def load_prefix(
     """
     if not address.strip() or not token.strip() or not prefix.strip():
         raise ConsulConfigurationError(
-            "CONSUL_HTTP_ADDR, CONSUL_HTTP_TOKEN and CONSUL_KV_PREFIX are required"
+            "CONSUL_HTTP_ADDR, CONSUL_HTTP_TOKEN y CONSUL_KV_PREFIX son obligatorios"
         )
 
     url = f"{address.rstrip('/')}/v1/kv/{prefix.lstrip('/')}?recurse=true"
@@ -47,7 +47,9 @@ def load_prefix(
         with urlopen(request, timeout=timeout, context=context) as response:
             entries = json.load(response)
     except (HTTPError, URLError, TimeoutError, ValueError) as error:
-        raise ConsulConfigurationError("unable to read Consul KV prefix") from error
+        raise ConsulConfigurationError(
+            "no se pudo leer el prefijo KV de Consul"
+        ) from error
 
     values: dict[str, str] = {}
     normalized_prefix = prefix.rstrip("/") + "/"
@@ -55,7 +57,7 @@ def load_prefix(
         key = entry["Key"]
         if not key.startswith(normalized_prefix) or key == normalized_prefix:
             raise ConsulConfigurationError(
-                "Consul returned a key outside the configured prefix"
+                "Consul devolvió una clave fuera del prefijo configurado"
             )
         try:
             values[key.removeprefix(normalized_prefix)] = base64.b64decode(
@@ -63,6 +65,6 @@ def load_prefix(
             ).decode()
         except (KeyError, ValueError, UnicodeDecodeError) as error:
             raise ConsulConfigurationError(
-                "invalid value in Consul KV response"
+                "valor inválido en la respuesta KV de Consul"
             ) from error
     return values

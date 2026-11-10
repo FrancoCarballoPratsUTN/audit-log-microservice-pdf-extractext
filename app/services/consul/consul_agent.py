@@ -8,7 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.consul import ConsulConfigurationError
+from app.services.consul.consul import ConsulConfigurationError
 
 
 def consul_registration() -> dict[str, Any] | None:
@@ -123,7 +123,7 @@ def deregister_service(
         ConsulConfigurationError: Si el servicio no se puede quitar.
     """
     if not service_id.strip():
-        raise ConsulConfigurationError("CONSUL_SERVICE_ID must not be empty")
+        raise ConsulConfigurationError("CONSUL_SERVICE_ID no debe estar vacío")
     _request(
         address,
         token,
@@ -161,7 +161,7 @@ def _request(
     """
     if not address.strip() or not token.strip():
         raise ConsulConfigurationError(
-            "CONSUL_HTTP_ADDR and CONSUL_HTTP_TOKEN are required"
+            "CONSUL_HTTP_ADDR y CONSUL_HTTP_TOKEN son obligatorios"
         )
     body = None if payload is None else json.dumps(payload, allow_nan=False).encode()
     request = Request(
@@ -175,9 +175,9 @@ def _request(
         with urlopen(request, timeout=timeout, context=context) as response:
             if response.status // 100 != 2:
                 raise ConsulConfigurationError(
-                    f"Consul service request returned HTTP {response.status}"
+                    f"La solicitud del servicio de Consul devolvió HTTP {response.status}"
                 )
     except (HTTPError, URLError, TimeoutError) as error:
         raise ConsulConfigurationError(
-            "unable to update Consul service registry"
+            "no se pudo actualizar el registro del servicio de Consul"
         ) from error

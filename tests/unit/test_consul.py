@@ -2,7 +2,7 @@
 import pytest
 
 from app.config import load_settings as _load_settings
-from app.consul_agent import consul_registration as _consul_registration
+from app.services.consul.consul_agent import consul_registration as _consul_registration
 from tests.unit._main_common import TOKEN
 
 

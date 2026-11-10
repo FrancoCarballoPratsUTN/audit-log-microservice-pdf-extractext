@@ -13,7 +13,7 @@ from app.api.middleware import install_middleware
 from app.api.routers.audit_logs import router as audit_logs_router
 from app.api.routers.health import router as health_router
 from app.config import Settings, load_settings
-from app.consul_agent import consul_registration, deregister_service, register_service
+from app.services.consul.consul_agent import consul_registration, deregister_service, register_service
 from app.errors import AuditStorageError
 from app.logging import configure_logging
 from app.repositories.mongo_audit_log_repository import MongoAuditLogRepository
