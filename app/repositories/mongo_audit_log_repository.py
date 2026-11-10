@@ -83,13 +83,13 @@ class MongoAuditLogRepository:
         Returns:
             La lista de registros.
         """
-        docs = (
-            await self._collection.find({})
+        cursor = (
+            self._collection.find({})
             .sort([("performed_at", -1), ("_id", -1)])
             .skip(skip)
             .limit(limit)
-            .to_list(limit)
         )
+        docs = [doc async for doc in cursor]
         return [to_audit_log(doc) for doc in docs]
 
     @translate_pymongo_errors

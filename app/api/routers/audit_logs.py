@@ -37,7 +37,9 @@ router = APIRouter(
     responses={
         200: {"model": AuditLogResponse, "description": "Replay idempotente (§7.4)."},
         400: {"description": "Cuerpo inválido."},
+        401: {"description": "Token faltante o inválido."},
         413: {"description": "'details' excede el límite."},
+        415: {"description": "Content-Type no es application/json."},
         **ERROR_RESPONSES,
     },
 )
